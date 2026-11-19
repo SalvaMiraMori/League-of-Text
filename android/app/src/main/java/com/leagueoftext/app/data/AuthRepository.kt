@@ -16,7 +16,6 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 
 sealed interface SignInResult {
@@ -36,11 +35,11 @@ sealed interface SignInResult {
  */
 class AuthRepository(private val auth: FirebaseAuth) {
 
-    private val _user = MutableStateFlow(auth.currentUser)
-    val user: StateFlow<FirebaseUser?> = _user.asStateFlow()
+    val user: StateFlow<FirebaseUser?>
+        field = MutableStateFlow(auth.currentUser)
 
     init {
-        auth.addAuthStateListener { _user.value = it.currentUser }
+        auth.addAuthStateListener { user.value = it.currentUser }
     }
 
     suspend fun signInWithGoogle(activityContext: Context): SignInResult {

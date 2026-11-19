@@ -11,7 +11,6 @@ import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -33,10 +32,10 @@ class SubscriptionRepository(
 ) {
     private val messaging: FirebaseMessaging get() = FirebaseMessaging.getInstance()
 
-    private val _subscriptions = MutableStateFlow(prefs.getStringSet(KEY, null)?.toSet() ?: emptySet())
-    val subscriptions: StateFlow<Set<String>> = _subscriptions.asStateFlow()
+    val subscriptions: StateFlow<Set<String>>
+        field = MutableStateFlow(prefs.getStringSet(KEY, null)?.toSet() ?: emptySet())
 
-    fun isSubscribed(matchId: String): Boolean = matchId in _subscriptions.value
+    fun isSubscribed(matchId: String): Boolean = matchId in subscriptions.value
 
     fun toggle(matchId: String) {
         if (isSubscribed(matchId)) unsubscribe(matchId) else subscribe(matchId)
@@ -67,7 +66,7 @@ class SubscriptionRepository(
             runCatching {
                 val doc = db.collection(USERS).document(uid).get().await()
                 val remote = (doc.get(FIELD) as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
-                val merged = remote + _subscriptions.value
+                val merged = remote + subscriptions.value
                 store { merged }
                 (merged - remote).takeIf { it.isNotEmpty() }?.let { missing ->
                     db.collection(USERS).document(uid)
@@ -83,7 +82,7 @@ class SubscriptionRepository(
 
     /** Torna a subscriure tots els topics (p. ex. quan FCM genera un token nou). */
     fun resubscribeAll() {
-        val ids = _subscriptions.value
+        val ids = subscriptions.value
         scope.launch {
             ids.forEach { id ->
                 runCatching { messaging.subscribeToTopic(id).await() }
@@ -103,8 +102,8 @@ class SubscriptionRepository(
     }
 
     private fun store(transform: (Set<String>) -> Set<String>) {
-        _subscriptions.update(transform)
-        prefs.edit { putStringSet(KEY, HashSet(_subscriptions.value)) }
+        subscriptions.update(transform)
+        prefs.edit { putStringSet(KEY, HashSet(subscriptions.value)) }
     }
 
     private companion object {

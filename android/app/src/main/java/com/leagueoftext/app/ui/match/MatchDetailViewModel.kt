@@ -7,7 +7,6 @@ import com.leagueoftext.app.data.Game
 import com.leagueoftext.app.data.GameEvent
 import com.leagueoftext.app.data.GameState
 import com.leagueoftext.app.data.Match
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +29,6 @@ data class MatchDetailUiState(
     val spoilersHidden: Boolean = true,
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class MatchDetailViewModel(
     private val matchId: String,
     private val container: AppContainer,

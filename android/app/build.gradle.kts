@@ -1,6 +1,6 @@
+// Amb AGP 9 Kotlin és integrat: ja no s'aplica org.jetbrains.kotlin.android.
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -14,16 +14,22 @@ if (file("google-services.json").exists()) {
 
 android {
     namespace = "com.leagueoftext.app"
-    compileSdk = 35
+    compileSdk {
+        version = release(37) // Compose 1.12 necessita API 37
+    }
 
     defaultConfig {
         // Es manté l'applicationId del projecte original perquè el google-services.json
         // existent continuï sent vàlid. Canvia'l si registres una app nova a Firebase.
         applicationId = "com.example.tfg_salva"
-        minSdk = 24
-        targetSdk = 35
-        versionCode = 2
-        versionName = "2.0.0"
+        minSdk {
+            version = release(24)
+        }
+        targetSdk {
+            version = release(37)
+        }
+        versionCode = 3
+        versionName = "2.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -41,10 +47,6 @@ android {
         isCoreLibraryDesugaringEnabled = true // java.time a API 24-25
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -52,6 +54,13 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+// Substitueix android.kotlinOptions {} (eliminat a AGP 9). El jvmTarget es pren de compileOptions.
+kotlin {
+    compilerOptions {
+        optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi") // flatMapLatest
     }
 }
 

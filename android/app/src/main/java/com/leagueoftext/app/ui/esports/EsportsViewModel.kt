@@ -7,7 +7,6 @@ import com.leagueoftext.app.data.Feed
 import com.leagueoftext.app.data.League
 import com.leagueoftext.app.data.Match
 import com.leagueoftext.app.ui.Formatters
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,7 +41,6 @@ private data class Filters(
     val revealed: Set<String>,
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class EsportsViewModel(private val container: AppContainer) : ViewModel() {
 
     private val repository = container.matches

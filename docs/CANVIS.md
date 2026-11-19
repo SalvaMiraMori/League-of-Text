@@ -57,6 +57,14 @@
 - `UpdateGameState` recupera el retard (fins a 15 finestres per execució) si va endarrerida.
 - Lambdes a Python 3.12 sobre arm64; R8 i reducció de recursos a la compilació *release* de l'app.
 
+## Versió 2.1: Kotlin 2.4 i AGP 9
+
+- Kotlin 2.0.21 → **2.4.21**, Android Gradle Plugin 8.7 → **9.5**, Gradle 8.11 → **9.6**.
+- Kotlin integrat a AGP 9: s'ha tret el plugin `org.jetbrains.kotlin.android`, i `kotlinOptions {}` passa a `kotlin { compilerOptions {} }`.
+- DSL nou d'AGP 9 per a `compileSdk`, `minSdk` i `targetSdk`. `compileSdk` i `targetSdk` passen a 37 (Compose 1.12 ho exigeix).
+- Compose BOM 2026.09.00 (Compose 1.12), Firebase BoM 35.1.0, google-services 4.5.0, Lifecycle 2.11, Navigation 2.10, Activity 1.13, Credentials 1.6, coroutines 1.11. `material-icons-extended` es fixa a 1.7.8, perquè ja no s'actualitza amb el BOM.
+- *Explicit backing fields* (estables a Kotlin 2.4) als repositoris: s'elimina el patró `_estat` + `asStateFlow()`.
+
 ## Interfície
 
 Redissenyada amb Jetpack Compose seguint l'estil de Riot Mobile: fons gairebé negre, títols grans, fila de lligues amb selecció blanca, pestanyes amb subratllat daurat, capçaleres per dia, targetes amb el marcador amagat fins que es toca l'ull, i detall amb selector de partides 1-5, marcador en directe (or, kills, torres, dracs, barons, inhibidors) i cronologia d'esdeveniments amb icones i colors per bàndol.

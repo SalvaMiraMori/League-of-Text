@@ -78,7 +78,7 @@ Si tens dades del model antic (`ScheduledMatches`, `LiveMatches`, `CompletedMatc
 
 ### App Android
 
-1. Obre la carpeta `android/` amb Android Studio (Ladybug o posterior, JDK 17).
+1. Obre la carpeta `android/` amb una versió recent d'Android Studio que admeti AGP 9.5 (JDK 17 o posterior).
 2. Copia el teu `google-services.json` a `android/app/`.
 3. A Firebase, afegeix l'empremta SHA-1 del teu certificat de debug (`./gradlew signingReport`) i activa Google a Authentication.
 4. Executa la configuració `app`.
@@ -120,7 +120,8 @@ Variables opcionals: `LEAGUES` (lligues separades per comes), `SCHEDULE_HORIZON_
 
 ## Tecnologies
 
-- **App:** Kotlin 2.0, Jetpack Compose (Material 3), Navigation Compose, ViewModel + StateFlow, Coil, Firebase Auth (Google amb Credential Manager), Firestore (memòria cau persistent) i Cloud Messaging. `minSdk` 24, `targetSdk` 35. Idiomes: català, castellà i anglès.
+- **App:** Kotlin 2.4.21, Jetpack Compose (BOM 2026.09.00, Compose 1.12, Material 3), Navigation Compose, ViewModel + StateFlow, Coil, Firebase Auth (Google amb Credential Manager), Firestore (memòria cau persistent) i Cloud Messaging. Interfície 100% Compose, sense layouts XML. `minSdk` 24, `compileSdk`/`targetSdk` 37. Idiomes: català, castellà i anglès.
+- **Compilació:** Gradle 9.6, Android Gradle Plugin 9.5 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
 - **Backend:** Python 3.12, `requests`, `firebase-admin`, `boto3`, AWS Lambda, Amazon EventBridge, AWS SAM.
 
 ## Limitacions conegudes

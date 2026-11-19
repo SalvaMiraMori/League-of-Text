@@ -4,27 +4,31 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
-/** Preferències de l'usuari, desades al dispositiu. */
+/**
+ * Preferències de l'usuari, desades al dispositiu.
+ *
+ * Fa servir *explicit backing fields* (estables des de Kotlin 2.4): fora de la classe la
+ * propietat és un `StateFlow` de només lectura, i a dins es pot modificar directament,
+ * sense el parell `_hideScores` / `asStateFlow()`.
+ */
 class SettingsRepository(private val prefs: SharedPreferences) {
 
-    private val _hideScores = MutableStateFlow(prefs.getBoolean(KEY_HIDE_SCORES, true))
-
     /** Com a Riot Mobile: els resultats s'amaguen fins que l'usuari els vol veure. */
-    val hideScores: StateFlow<Boolean> = _hideScores.asStateFlow()
+    val hideScores: StateFlow<Boolean>
+        field = MutableStateFlow(prefs.getBoolean(KEY_HIDE_SCORES, true))
 
-    private val _notificationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_NOTIFICATIONS, true))
-    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+    val notificationsEnabled: StateFlow<Boolean>
+        field = MutableStateFlow(prefs.getBoolean(KEY_NOTIFICATIONS, true))
 
     fun setHideScores(value: Boolean) {
         prefs.edit { putBoolean(KEY_HIDE_SCORES, value) }
-        _hideScores.value = value
+        hideScores.value = value
     }
 
     fun setNotificationsEnabled(value: Boolean) {
         prefs.edit { putBoolean(KEY_NOTIFICATIONS, value) }
-        _notificationsEnabled.value = value
+        notificationsEnabled.value = value
     }
 
     private companion object {
