@@ -4,6 +4,7 @@
     export GOOGLE_APPLICATION_CREDENTIALS=/ruta/a/la/clau.json
     python scripts/migrate_legacy_collections.py            # simulació (no escriu res)
     python scripts/migrate_legacy_collections.py --apply    # escriu a Firestore
+    python scripts/migrate_legacy_collections.py --apply --recent 0   # tots els partits acabats
 
 No esborra les col·leccions antigues. A més de copiar els documents:
 
@@ -12,6 +13,11 @@ No esborra les col·leccions antigues. A més de copiar els documents:
 * els partits que van quedar a ``LiveMatches`` fa més d'un dia es marquen com a acabats,
   i els de ``ScheduledMatches`` que ja han passat no es copien (no es van arribar a jugar
   amb el backend antic en marxa).
+
+Per estalviar quota (el pla gratuït de Firestore permet 20.000 escriptures al dia), per defecte
+només es copien els 60 partits acabats més recents, que és el que mostra l'app (``--recent 0``
+per copiar-los tots). Si la quota s'esgota a mitges, es pot tornar a executar: els partits que
+ja s'havien copiat sencers se salten (``--force`` per tornar-los a copiar).
 
 Les notificacions es copien tal com són: l'app sap llegir el format antic.
 """
@@ -84,44 +90,77 @@ def convert_game(data: dict, match_state: str) -> dict:
     return doc
 
 
-def migrate(apply: bool) -> None:
+def migrate(apply: bool, recent: int, force: bool) -> None:
+    from google.api_core.exceptions import ResourceExhausted, RetryError
+    from google.cloud.firestore import Query
+
     from leagueoftext import store
 
     db = store.db()
     now = datetime.now(timezone.utc)
-    copied = skipped = 0
-    for collection in LEGACY:
-        for match in db.collection(collection).stream():
-            doc = convert_match(collection, match.to_dict(), now)
-            if doc is None:
-                skipped += 1
-                print(f"  {collection}/{match.id}: ja ha passat, no es copia")
-                continue
-            copied += 1
-            print(f"{collection}/{match.id} -> {store.MATCHES}/{match.id} ({doc['state']}, {doc.get('score', '-')})")
-            if not apply:
-                continue
-            target = db.collection(store.MATCHES).document(match.id)
-            batch, count = db.batch(), 1
-            batch.set(target, doc, merge=True)
-            for game in match.reference.collection("Games").stream():
-                game_target = target.collection(store.GAMES).document(game.id)
-                batch.set(game_target, convert_game(game.to_dict(), doc["state"]), merge=True)
-                count += 1
-                for notification in game.reference.collection("Notifications").stream():
-                    batch.set(game_target.collection(store.NOTIFICATIONS).document(notification.id), notification.to_dict())
+    copied = skipped = already = writes = 0
+    try:
+        for collection in LEGACY:
+            query = db.collection(collection)
+            if collection == "CompletedMatches" and recent > 0:
+                # L'app només mostra els 60 resultats més recents: no cal gastar quota amb la resta.
+                query = query.order_by("startTime", direction=Query.DESCENDING).limit(recent)
+            for match in query.stream():
+                doc = convert_match(collection, match.to_dict(), now)
+                if doc is None:
+                    skipped += 1
+                    continue
+                target = db.collection(store.MATCHES).document(match.id)
+                if apply and not force:
+                    existing = target.get()
+                    if existing.exists and existing.get("migratedAt") is not None:
+                        already += 1
+                        continue
+                copied += 1
+                print(f"{collection}/{match.id} -> {store.MATCHES}/{match.id} ({doc['state']}, {doc.get('score', '-')})")
+                if not apply:
+                    continue
+                batch, count = db.batch(), 1
+                batch.set(target, doc, merge=True)
+                for game in match.reference.collection("Games").stream():
+                    game_target = target.collection(store.GAMES).document(game.id)
+                    batch.set(game_target, convert_game(game.to_dict(), doc["state"]), merge=True)
                     count += 1
-                    if count >= store.BATCH_LIMIT:
-                        batch.commit()
-                        batch, count = db.batch(), 0
-            batch.commit()
+                    for notification in game.reference.collection("Notifications").stream():
+                        batch.set(game_target.collection(store.NOTIFICATIONS).document(notification.id), notification.to_dict())
+                        count += 1
+                        if count >= store.BATCH_LIMIT:
+                            batch.commit()
+                            writes += count
+                            batch, count = db.batch(), 0
+                # La marca es posa al final: si s'atura a mitges, aquest partit es tornarà a copiar.
+                batch.set(target, {"migratedAt": now}, merge=True)
+                batch.commit()
+                writes += count + 1
+    except (ResourceExhausted, RetryError) as exc:
+        if isinstance(exc, RetryError) and not isinstance(exc.cause, ResourceExhausted):
+            raise
+        print(
+            "\nS'ha esgotat la quota diària de Firestore (pla gratuït: 20.000 escriptures i 50.000 lectures).\n"
+            "Es reinicia a mitjanit, hora del Pacífic (les 9:00 a Espanya). Torna a executar la mateixa ordre\n"
+            "llavors: els partits ja migrats se saltaran."
+        )
+        print(f"Escriptures fetes en aquesta execució: ~{writes}.")
+        sys.exit(1)
+
     action = "copiats" if apply else "es copiarien"
-    print(f"\nPartits {action}: {copied}. Descartats: {skipped}.")
-    if not apply:
+    print(f"\nPartits {action}: {copied}. Ja migrats abans: {already}. Descartats (ja passats): {skipped}.")
+    if apply:
+        print(f"Escriptures: ~{writes}.")
+    else:
         print("Simulació: torna-ho a executar amb --apply per escriure.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--apply", action="store_true", help="escriu de debò (per defecte només mostra què faria)")
-    migrate(parser.parse_args().apply)
+    parser.add_argument("--recent", type=int, default=60,
+                        help="quants partits acabats (els més recents) es copien; 0 = tots (per defecte, 60)")
+    parser.add_argument("--force", action="store_true", help="torna a copiar també els partits ja migrats")
+    args = parser.parse_args()
+    migrate(args.apply, args.recent, args.force)
