@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Regles de seguretat de Firestore per a League of Text.
+// El backend escriu amb el SDK d'administrador (que no passa per aquestes regles).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Partits, jocs i esdeveniments: lectura pública, escriptura només des del backend.
+    match /Matches/{matchId}/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Cada usuari només pot llegir i modificar el seu propi document.
+    match /Users/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['subscribedMatches', 'updatedAt'])
+        && request.resource.data.subscribedMatches is list
+        && request.resource.data.subscribedMatches.size() <= 500;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

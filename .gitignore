@@ -1,0 +1,41 @@
+# ---- Credencials: no s'han de versionar MAI ----
+google-services.json
+GoogleService-Info.plist
+secret_key.json
+*service-account*.json
+*-firebase-adminsdk-*.json
+.env
+.env.*
+*.keystore
+*.jks
+local.properties
+samconfig.toml
+
+# ---- Android / Gradle ----
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.iml
+.idea/
+.kotlin/
+
+# ---- Python / AWS ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.aws-sam/
+.serverless/
+*.zip
+
+# ---- Sistema ----
+.DS_Store
+Thumbs.db
+
+# ---- Material de referència (captures de Riot Mobile) ----
+Graphics sources/

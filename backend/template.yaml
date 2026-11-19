@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: League of Text - backend de seguiment de partits de LoL Esports
+
+Parameters:
+  LolEsportsApiKey:
+    Type: String
+    NoEcho: true
+    Description: Valor de la capçalera x-api-key de esports-api.lolesports.com
+  FirebaseCredentialsSecretArn:
+    Type: String
+    Description: ARN del secret de Secrets Manager amb el JSON del compte de servei de Firebase
+  Leagues:
+    Type: String
+    Default: "LCK,LEC,LCS,Worlds,MSI,First Stand"
+    Description: Lligues que se segueixen (nom exacte de l'API, separades per comes)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    CodeUri: src/
+    MemorySize: 256
+    Timeout: 50
+    Layers: [!Ref DependenciesLayer]
+    Environment:
+      Variables:
+        LOLESPORTS_API_KEY: !Ref LolEsportsApiKey
+        FIREBASE_CREDENTIALS_SECRET_ARN: !Ref FirebaseCredentialsSecretArn
+        LEAGUES: !Ref Leagues
+
+Resources:
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: league-of-text-dependencies
+      ContentUri: layer/
+      CompatibleRuntimes: [python3.12]
+      CompatibleArchitectures: [arm64]
+    Metadata:
+      BuildMethod: python3.12
+      BuildArchitecture: arm64
+
+  # Permisos comuns: llegir el secret i gestionar les regles d'EventBridge i les invocacions.
+  BackendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: league-of-text
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref FirebaseCredentialsSecretArn
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:DeleteRule
+                  - events:DescribeRule
+                  - events:EnableRule
+                  - events:DisableRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                  - events:ListTargetsByRule
+                Resource: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/*
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                  - lambda:AddPermission
+                Resource:
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:MatchIsLiveScheduler
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:MatchIsLive
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:UpdateMatchState
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:GameIsLive
+                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:UpdateGameState
+
+  GetScheduledMatches:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetScheduledMatches
+      Handler: leagueoftext.handlers.get_scheduled_matches.lambda_handler
+      Role: !GetAtt BackendRole.Arn
+      Timeout: 300
+      Events:
+        EverySixHours:
+          Type: Schedule
+          Properties:
+            Schedule: rate(6 hours)
+
+  MatchIsLiveScheduler:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MatchIsLiveScheduler
+      Handler: leagueoftext.handlers.match_is_live_scheduler.lambda_handler
+      Role: !GetAtt BackendRole.Arn
+
+  MatchIsLive:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MatchIsLive
+      Handler: leagueoftext.handlers.match_is_live.lambda_handler
+      Role: !GetAtt BackendRole.Arn
+
+  UpdateMatchState:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: UpdateMatchState
+      Handler: leagueoftext.handlers.update_match_state.lambda_handler
+      Role: !GetAtt BackendRole.Arn
+
+  GameIsLive:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GameIsLive
+      Handler: leagueoftext.handlers.game_is_live.lambda_handler
+      Role: !GetAtt BackendRole.Arn
+
+  UpdateGameState:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: UpdateGameState
+      Handler: leagueoftext.handlers.update_game_state.lambda_handler
+      Role: !GetAtt BackendRole.Arn
+      MemorySize: 512
+
+Outputs:
+  GetScheduledMatchesArn:
+    Value: !GetAtt GetScheduledMatches.Arn

@@ -1,0 +1,4 @@
+# Dependències de les Lambdes (van a la capa, vegeu layer/requirements.txt).
+# boto3 ja és present al runtime de Lambda.
+firebase-admin>=6.5,<7
+requests>=2.31,<3

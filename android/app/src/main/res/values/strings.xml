@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">League of Text</string>
+    <string name="channel_live_id" translatable="false">live_events</string>
+    <string name="game_name_short" translatable="false">LoL Esports</string>
+    <string name="versus" translatable="false">VS</string>
+    <string name="tab_esports">Esports</string>
+    <string name="tab_following">Seguint</string>
+    <string name="tab_profile">Perfil</string>
+    <string name="tab_upcoming">Pròximament</string>
+    <string name="tab_live">En directe</string>
+    <string name="tab_results">Resultats</string>
+    <string name="league_all">Totes</string>
+    <string name="live_badge">EN DIRECTE</string>
+    <string name="match_finished">Final</string>
+    <string name="action_back">Enrere</string>
+    <string name="action_follow">Segueix el partit</string>
+    <string name="action_unfollow">Deixa de seguir el partit</string>
+    <string name="action_share">Comparteix</string>
+    <string name="action_show_score">Mostra el resultat</string>
+    <string name="action_show_results">Mostra els resultats</string>
+    <string name="action_sign_in_google">Inicia la sessió amb Google</string>
+    <string name="action_sign_out">Tanca la sessió</string>
+    <string name="channel_live_name">Partits en directe</string>
+    <string name="channel_live_description">Esdeveniments dels partits que segueixes</string>
+    <string name="empty_upcoming_title">No hi ha partits programats</string>
+    <string name="empty_upcoming_message">Els partits de les dues setmanes vinents apareixeran aquí.</string>
+    <string name="empty_live_title">Ara no es juga cap partit</string>
+    <string name="empty_live_message">Quan comenci un partit, el veuràs aquí en temps real.</string>
+    <string name="empty_results_title">Encara no hi ha resultats</string>
+    <string name="empty_results_message">Aquí hi trobaràs els partits acabats.</string>
+    <string name="empty_following_title">No segueixes cap partit</string>
+    <string name="empty_following_message">Toca la campaneta d\'un partit per rebre una notificació de cada esdeveniment.</string>
+    <string name="error_title">No s\'han pogut carregar els partits</string>
+    <string name="error_message">Comprova la connexió. Es tornarà a provar automàticament.</string>
+    <string name="firebase_missing_title">Falta configurar Firebase</string>
+    <string name="firebase_missing_message">Copia el fitxer google-services.json del teu projecte de Firebase a android/app/ i torna a compilar l\'app.</string>
+    <string name="match_not_found_title">No s\'ha trobat el partit</string>
+    <string name="match_not_found_message">Potser s\'ha ajornat o s\'ha esborrat.</string>
+    <string name="game_label">Partida</string>
+    <string name="game_not_started_title">Aquesta partida encara no ha començat</string>
+    <string name="game_not_started_message">Els esdeveniments apareixeran aquí en directe.</string>
+    <string name="game_finished">Acabada</string>
+    <string name="game_paused">En pausa</string>
+    <string name="game_winner">Victòria de %1$s</string>
+    <string name="spoilers_hidden_title">Resultats amagats</string>
+    <string name="spoilers_hidden_message">Pots desactivar aquesta opció al teu perfil.</string>
+    <string name="timeline">Cronologia</string>
+    <string name="no_events">Encara no hi ha esdeveniments.</string>
+    <string name="stat_kills">Morts</string>
+    <string name="stat_gold">Or</string>
+    <string name="stat_towers">Torres</string>
+    <string name="stat_dragons">Dracs</string>
+    <string name="stat_barons">Barons</string>
+    <string name="stat_inhibitors">Inhibidors</string>
+    <string name="event_stats">%1$s %2$d–%3$d %4$s · Or %5$s–%6$s · Torres %7$d–%8$d · Dracs %9$d–%10$d</string>
+    <string name="share_text">%1$s · %2$s (%3$s). Segueix-lo amb League of Text!</string>
+    <string name="profile_guest">Convidat</string>
+    <string name="profile_guest_hint">Inicia la sessió per guardar els partits que segueixes al teu compte.</string>
+    <string name="profile_preferences">Preferències</string>
+    <string name="setting_hide_scores">Amaga els resultats</string>
+    <string name="setting_hide_scores_desc">Evita espòilers fins que toquis l\'ull.</string>
+    <string name="setting_notifications">Notificacions</string>
+    <string name="profile_about">League of Text %1$s · Treball de Fi de Grau, Universitat de Barcelona</string>
+    <string name="sign_in_error">No s\'ha pogut iniciar la sessió. Torna-ho a provar.</string>
+    <string name="sign_in_missing_config">Falta el client OAuth web al google-services.json (vegeu el README).</string>
+    <plurals name="best_of">
+        <item quantity="one">Partida única</item>
+        <item quantity="other">Millor de %d</item>
+    </plurals>
+    <plurals name="following_count">
+        <item quantity="one">Segueixes %d partit</item>
+        <item quantity="other">Segueixes %d partits</item>
+    </plurals>
+</resources>
