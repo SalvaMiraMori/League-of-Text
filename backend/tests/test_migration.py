@@ -66,3 +66,45 @@ def test_game_gets_winner_and_teams():
     assert doc["state"] == "completed" and doc["winnerId"] == "2"
     assert doc["blueTeam"] == "T1" and doc["redTeamId"] == "2"
     assert "gameObjectJson" not in doc
+
+
+# --- El backend antic no desava la victòria de l'última partida -----------------------------
+
+
+def test_last_game_win_is_restored_from_legacy_winner():
+    """Bo5 acabat 3-2 però desat com 2-2 (amb el guanyador sí desat)."""
+    doc = migrate.convert_match("CompletedMatches", old_match("2022-11-05T08:00:00Z", wins=(2, 2)), NOW)
+    assert doc["score"] == {"1": 3, "2": 2}
+    assert doc["winnerId"] == "1"
+
+
+def test_bo3_won_by_second_team_is_restored():
+    data = old_match("2022-11-05T08:00:00Z", wins=(1, 1), necessary=2)
+    data["numberOfGames"] = 3
+    data["matchObjectJson"]["winner"] = {"name": "Gen.G", "wins": 1}
+    doc = migrate.convert_match("CompletedMatches", data, NOW)
+    assert doc["score"] == {"1": 1, "2": 2}
+    assert doc["winnerId"] == "2"
+
+
+def test_bo1_saved_as_zero_zero_is_restored():
+    data = old_match("2022-11-05T08:00:00Z", wins=(0, 0), necessary=1)
+    data["numberOfGames"] = 1
+    data["matchObjectJson"]["winner"] = {"name": "T1", "wins": 0}
+    doc = migrate.convert_match("CompletedMatches", data, NOW)
+    assert doc["score"] == {"1": 1, "2": 0}
+    assert doc["winnerId"] == "1"
+
+
+def test_score_is_rebuilt_from_game_winners_when_there_is_no_legacy_winner():
+    data = old_match("2022-11-05T08:00:00Z", wins=(1, 1), necessary=2)
+    data["numberOfGames"] = 3
+    data["matchObjectJson"].pop("winner")
+    doc = migrate.convert_match("CompletedMatches", data, NOW, game_winners=["1", "2", "2"])
+    assert doc["score"] == {"1": 1, "2": 2}
+    assert doc["winnerId"] == "2"
+
+
+def test_live_match_score_is_not_inflated():
+    doc = migrate.convert_match("LiveMatches", old_match("2026-11-19T10:00:00Z", wins=(1, 1)), NOW)
+    assert doc["score"] == {"1": 1, "2": 1}

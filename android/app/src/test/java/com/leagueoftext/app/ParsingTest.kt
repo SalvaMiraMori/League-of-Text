@@ -37,6 +37,22 @@ class ParsingTest {
     }
 
     @Test
+    fun legacyGoldWithKSuffixIsParsed() {
+        assertEquals(48600, FirestoreParsers.parseGold("48.6k"))
+        assertEquals(59200, FirestoreParsers.parseGold(" 59.2K "))
+        assertEquals(48600, FirestoreParsers.parseGold("48.6"))
+        assertEquals(48600, FirestoreParsers.parseGold("48600"))
+        assertEquals(0, FirestoreParsers.parseGold(null))
+        assertEquals(0, FirestoreParsers.parseGold("abc"))
+    }
+
+    @Test
+    fun goldBarMatchesEachTeamsGold() {
+        assertEquals(48600f / (48600 + 59200), com.leagueoftext.app.ui.match.blueGoldFraction(48600, 59200), 0.0001f)
+        assertEquals(0.5f, com.leagueoftext.app.ui.match.blueGoldFraction(0, 0), 0f)
+    }
+
+    @Test
     fun initials() {
         assertEquals("BG", Formatters.initials("Bilibili Gaming"))
         assertEquals("?", Formatters.initials(""))

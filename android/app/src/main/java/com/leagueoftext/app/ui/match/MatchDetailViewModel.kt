@@ -7,6 +7,7 @@ import com.leagueoftext.app.data.Game
 import com.leagueoftext.app.data.GameEvent
 import com.leagueoftext.app.data.GameState
 import com.leagueoftext.app.data.Match
+import com.leagueoftext.app.ui.components.ManualRefresh
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,7 @@ data class MatchDetailUiState(
     val events: List<GameEvent> = emptyList(),
     val subscribed: Boolean = false,
     val spoilersHidden: Boolean = true,
+    val refreshing: Boolean = false,
 )
 
 class MatchDetailViewModel(
@@ -39,6 +41,7 @@ class MatchDetailViewModel(
     /** Número de partida triat per l'usuari; `null` = la més recent que s'ha jugat. */
     private val selectedNumber = MutableStateFlow<Int?>(null)
     private val revealed = MutableStateFlow(false)
+    private val manualRefresh = ManualRefresh(this)
 
     private val match = repository.match(matchId).map<Match?, Loadable<Match?>> { Loadable(it) }
         .onStart { emit(Loadable(null, loading = true)) }
@@ -64,8 +67,10 @@ class MatchDetailViewModel(
         games,
         selectedGame,
         events,
-        combine(container.subscriptions.subscriptions, spoilersHidden) { subs, hidden -> (matchId in subs) to hidden },
-    ) { m, g, selected, e, (subscribed, hidden) ->
+        combine(container.subscriptions.subscriptions, spoilersHidden, manualRefresh.refreshing) { subs, hidden, refreshing ->
+            Triple(matchId in subs, hidden, refreshing)
+        },
+    ) { m, g, selected, e, (subscribed, hidden, refreshing) ->
         MatchDetailUiState(
             loading = m.loading,
             match = m.value,
@@ -74,8 +79,14 @@ class MatchDetailViewModel(
             events = e,
             subscribed = subscribed,
             spoilersHidden = hidden,
+            refreshing = refreshing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MatchDetailUiState())
+
+    /** Estirar la pantalla cap avall des de dalt. */
+    fun refresh() = manualRefresh.launch {
+        repository.refreshMatch(matchId, uiState.value.selectedGame?.id)
+    }
 
     fun selectGame(number: Int) {
         selectedNumber.value = number

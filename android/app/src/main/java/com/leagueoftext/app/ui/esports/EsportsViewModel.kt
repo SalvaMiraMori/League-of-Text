@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.leagueoftext.app.AppContainer
 import com.leagueoftext.app.data.Feed
 import com.leagueoftext.app.data.League
+import com.leagueoftext.app.data.Leagues
 import com.leagueoftext.app.data.Match
 import com.leagueoftext.app.ui.Formatters
+import com.leagueoftext.app.ui.components.ManualRefresh
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +34,7 @@ data class EsportsUiState(
     val subscriptions: Set<String> = emptySet(),
     val hideScores: Boolean = true,
     val revealed: Set<String> = emptySet(),
+    val refreshing: Boolean = false,
 )
 
 private data class Filters(
@@ -49,6 +52,10 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
     private val selectedTab = MutableStateFlow<EsportsTab?>(null)
     private val selectedLeague = MutableStateFlow<String?>(null)
     private val revealed = MutableStateFlow<Set<String>>(emptySet())
+    private val manualRefresh = ManualRefresh(this)
+
+    /** Totes les lligues vistes en qualsevol pestanya, per conservar-ne el logotip. */
+    private val seenLeagues = MutableStateFlow<Map<String, League>>(emptyMap())
 
     private val tab = combine(selectedTab, repository.live) { chosen, live ->
         chosen ?: if (live.data.isNotEmpty()) EsportsTab.LIVE else EsportsTab.UPCOMING
@@ -71,13 +78,16 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
     ) { league, subs, hide, shown -> Filters(league, subs, hide, shown) }
 
     val uiState: StateFlow<EsportsUiState> =
-        combine(tabFeed, repository.live, filters) { (currentTab, feed), live, f ->
-            buildState(currentTab, feed, live, f)
+        combine(tabFeed, repository.live, filters, manualRefresh.refreshing) { (currentTab, feed), live, f, refreshing ->
+            buildState(currentTab, feed, live, f).copy(refreshing = refreshing)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EsportsUiState())
 
     fun selectTab(tab: EsportsTab) {
         selectedTab.value = tab
     }
+
+    /** Estirar la llista cap avall des de dalt. */
+    fun refresh() = manualRefresh.launch { repository.refreshLists() }
 
     fun selectLeague(key: String?) {
         selectedLeague.value = key
@@ -91,15 +101,32 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
         container.subscriptions.toggle(matchId)
     }
 
+    private fun rememberLeagues(matches: List<Match>) {
+        val found = matches.mapNotNull { it.league }
+        if (found.isEmpty()) return
+        seenLeagues.update { current ->
+            var next = current
+            for (league in found) {
+                val key = Leagues.canonicalKey(league)
+                val old = next[key]
+                if (old == null || (old.image.isBlank() && league.image.isNotBlank())) next = next + (key to league)
+            }
+            next
+        }
+    }
+
     private fun buildState(
         tab: EsportsTab,
         feed: Feed<List<Match>>,
         live: Feed<List<Match>>,
         f: Filters,
     ): EsportsUiState {
-        val leagues = feed.data.mapNotNull { it.league }.distinctBy { it.key }
+        rememberLeagues(feed.data + live.data)
+        val leagues = Leagues.merge(seenLeagues.value.values)
         val league = f.selectedLeague?.takeIf { key -> leagues.any { it.key == key } }
-        val visible = if (league == null) feed.data else feed.data.filter { it.league?.key == league }
+        val visible = if (league == null) feed.data else feed.data.filter { match ->
+            match.league?.let(Leagues::canonicalKey) == league
+        }
         val sections = visible
             .groupBy { Formatters.localDate(it.startTime) }
             .map { (date, matches) -> DaySection(date, matches) }

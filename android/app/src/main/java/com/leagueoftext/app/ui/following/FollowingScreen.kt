@@ -1,6 +1,7 @@
 package com.leagueoftext.app.ui.following
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,7 +26,9 @@ import com.leagueoftext.app.data.Match
 import com.leagueoftext.app.data.MatchState
 import com.leagueoftext.app.ui.components.EmptyState
 import com.leagueoftext.app.ui.components.LoadingState
+import com.leagueoftext.app.ui.components.ManualRefresh
 import com.leagueoftext.app.ui.components.MatchCard
+import com.leagueoftext.app.ui.components.RefreshableContent
 import com.leagueoftext.app.ui.components.ScreenHeader
 import com.leagueoftext.app.ui.components.SectionHeader
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +46,7 @@ data class FollowingUiState(
     val subscriptions: Set<String> = emptySet(),
     val hideScores: Boolean = true,
     val revealed: Set<String> = emptySet(),
+    val refreshing: Boolean = false,
 ) {
     val isEmpty: Boolean get() = live.isEmpty() && upcoming.isEmpty() && finished.isEmpty()
 }
@@ -51,13 +55,14 @@ class FollowingViewModel(private val container: AppContainer) : ViewModel() {
 
     private val revealed = MutableStateFlow<Set<String>>(emptySet())
     private val matches = container.matches
+    private val manualRefresh = ManualRefresh(this)
 
-    private val prefs = combine(container.subscriptions.subscriptions, container.settings.hideScores, revealed) { subs, hide, shown ->
-        Triple(subs, hide, shown)
+    private val prefs = combine(container.subscriptions.subscriptions, container.settings.hideScores, revealed, manualRefresh.refreshing) { subs, hide, shown, refreshing ->
+        Prefs(subs, hide, shown, refreshing)
     }
 
     val uiState: StateFlow<FollowingUiState> =
-        combine(matches.live, matches.scheduled, matches.completed, prefs) { live, scheduled, completed, (subs, hide, shown) ->
+        combine(matches.live, matches.scheduled, matches.completed, prefs) { live, scheduled, completed, (subs, hide, shown, refreshing) ->
             FollowingUiState(
                 loading = live.loading || scheduled.loading || completed.loading,
                 live = live.data.filter { it.id in subs },
@@ -66,12 +71,17 @@ class FollowingViewModel(private val container: AppContainer) : ViewModel() {
                 subscriptions = subs,
                 hideScores = hide,
                 revealed = shown,
+                refreshing = refreshing,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FollowingUiState())
+
+    fun refresh() = manualRefresh.launch { matches.refreshLists() }
 
     fun revealScore(matchId: String) = revealed.update { it + matchId }
 
     fun toggleSubscription(matchId: String) = container.subscriptions.toggle(matchId)
+
+    private data class Prefs(val subs: Set<String>, val hide: Boolean, val shown: Set<String>, val refreshing: Boolean)
 }
 
 @Composable
@@ -80,21 +90,23 @@ fun FollowingRoute(onOpenMatch: (String) -> Unit) {
     val viewModel: FollowingViewModel = viewModel(factory = viewModelFactory { initializer { FollowingViewModel(container) } })
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-        item(key = "header") { ScreenHeader(stringResource(R.string.tab_following)) }
-        when {
-            state.isEmpty && state.loading -> item(key = "loading") { LoadingState() }
-            state.isEmpty -> item(key = "empty") {
-                EmptyState(
-                    Icons.Outlined.NotificationsNone,
-                    stringResource(R.string.empty_following_title),
-                    stringResource(R.string.empty_following_message),
-                )
-            }
-            else -> {
-                section(R.string.tab_live, state.live, state, viewModel, onOpenMatch)
-                section(R.string.tab_upcoming, state.upcoming, state, viewModel, onOpenMatch)
-                section(R.string.tab_results, state.finished, state, viewModel, onOpenMatch)
+    RefreshableContent(refreshing = state.refreshing, onRefresh = viewModel::refresh) {
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+            item(key = "header") { ScreenHeader(stringResource(R.string.tab_following)) }
+            when {
+                state.isEmpty && state.loading -> item(key = "loading") { LoadingState() }
+                state.isEmpty -> item(key = "empty") {
+                    EmptyState(
+                        Icons.Outlined.NotificationsNone,
+                        stringResource(R.string.empty_following_title),
+                        stringResource(R.string.empty_following_message),
+                    )
+                }
+                else -> {
+                    section(R.string.tab_live, state.live, state, viewModel, onOpenMatch)
+                    section(R.string.tab_upcoming, state.upcoming, state, viewModel, onOpenMatch)
+                    section(R.string.tab_results, state.finished, state, viewModel, onOpenMatch)
+                }
             }
         }
     }

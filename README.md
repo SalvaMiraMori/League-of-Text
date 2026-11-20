@@ -6,6 +6,25 @@ La interfície s'inspira en l'app **Riot Mobile**: fons fosc, títols grans, fil
 
 > Versió neta del Treball de Fi de Grau (Facultat de Matemàtiques i Informàtica, Universitat de Barcelona, 2022-2023), amb errors corregits, optimitzacions i sense cap credencial al codi. Els canvis respecte de la versió original estan detallats a [`docs/CANVIS.md`](docs/CANVIS.md).
 
+## Estat actual
+
+*Novembre de 2026 · versió 2.1*
+
+**Fet i funcionant**
+
+- **Backend complet:** les sis Lambdes, la plantilla d'AWS SAM, el model de dades unificat a `Matches` i la generació d'esdeveniments (primera sang, multikills, torres, dracs, barons, inhibidors, pauses i resultat). Tot amb tests de pytest, inclòs el flux sencer amb dobles en memòria.
+- **App Android:** pantalles Esports (Pròxims · En directe · Resultats, amb filtre per lliga), detall del partit amb selector de partides i cronologia, Seguint i Perfil. Inici de sessió amb Google, seguiment de partits sense compte, notificacions push agrupades per partit i traducció al català, castellà i anglès.
+- **Estirar per refrescar** a Esports, Seguint i al detall del partit: força una lectura al servidor i reinicia els listeners que havien fallat sense esperar el reintent.
+- **Fila de lligues fixa:** LCK, LEC, LCS, Mundial, MSI i First Stand surten sempre, encara que la pestanya no en tingui partits, i conserven el logotip un cop vist.
+- **Migració del model antic** (`backend/scripts/migrate_legacy_collections.py`): reconstrueix el marcador i el guanyador dels partits acabats (el backend antic no desava l'última victòria), descarta els partits obsolets, estalvia quota de Firestore i es pot reprendre. L'opció `--scores-only` corregeix només els marcadors de partits ja migrats.
+- **Compilació actualitzada:** Kotlin 2.4.21, AGP 9.5.1 i Gradle 9.6, amb el dimoni de Gradle sobre JDK 25.
+
+**Pendent**
+
+- Revocar i regenerar les credencials que encara són a l'historial del repositori antic (vegeu [`docs/CANVIS.md`](docs/CANVIS.md)).
+- Fer el desplegament definitiu del backend amb les credencials noves i comprovar-lo durant una jornada de competició real.
+- Afegir tests de la interfície de l'app (ara només hi ha tests unitaris de lectura de dades i de lligues).
+
 ## Arquitectura
 
 ```mermaid
@@ -62,7 +81,7 @@ docs/                    Documentació addicional
 | `…/Games/{gameId}/Notifications/{seq}` | `type`, `text`, `playingTime`, `side` i estadístiques en aquell moment |
 | `Users/{uid}` | `subscribedMatches` (només el pot llegir i escriure el mateix usuari) |
 
-Si tens dades del model antic (`ScheduledMatches`, `LiveMatches`, `CompletedMatches`), copia-les amb `backend/scripts/migrate_legacy_collections.py`. L'app també sap llegir les notificacions antigues.
+Si tens dades del model antic (`ScheduledMatches`, `LiveMatches`, `CompletedMatches`), copia-les amb `backend/scripts/migrate_legacy_collections.py` (per defecte fa una simulació; afegeix `--apply` per escriure). Si es talla, es pot tornar a executar i continua on era. L'app també sap llegir les notificacions antigues.
 
 ## Credencials
 
@@ -78,7 +97,7 @@ Si tens dades del model antic (`ScheduledMatches`, `LiveMatches`, `CompletedMatc
 
 ### App Android
 
-1. Obre la carpeta `android/` amb una versió recent d'Android Studio que admeti AGP 9.5 (JDK 17 o posterior).
+1. Obre la carpeta `android/` amb una versió recent d'Android Studio que admeti AGP 9.5. Gradle descarrega sol el JDK 25 per al dimoni (`gradle/gradle-daemon-jvm.properties`).
 2. Copia el teu `google-services.json` a `android/app/`.
 3. A Firebase, afegeix l'empremta SHA-1 del teu certificat de debug (`./gradlew signingReport`) i activa Google a Authentication.
 4. Executa la configuració `app`.
@@ -121,7 +140,7 @@ Variables opcionals: `LEAGUES` (lligues separades per comes), `SCHEDULE_HORIZON_
 ## Tecnologies
 
 - **App:** Kotlin 2.4.21, Jetpack Compose (BOM 2026.09.00, Compose 1.12, Material 3), Navigation Compose, ViewModel + StateFlow, Coil, Firebase Auth (Google amb Credential Manager), Firestore (memòria cau persistent) i Cloud Messaging. Interfície 100% Compose, sense layouts XML. `minSdk` 24, `compileSdk`/`targetSdk` 37. Idiomes: català, castellà i anglès.
-- **Compilació:** Gradle 9.6, Android Gradle Plugin 9.5 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
+- **Compilació:** Gradle 9.6 (dimoni sobre JDK 25), Android Gradle Plugin 9.5.1 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
 - **Backend:** Python 3.12, `requests`, `firebase-admin`, `boto3`, AWS Lambda, Amazon EventBridge, AWS SAM.
 
 ## Limitacions conegudes

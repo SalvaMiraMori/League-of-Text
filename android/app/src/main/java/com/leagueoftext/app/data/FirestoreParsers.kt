@@ -120,17 +120,28 @@ internal object FirestoreParsers {
         return GameStats(
             blue = TeamStats(
                 kills = blueKills.toInt(),
-                gold = ((num("blueTeamGold") ?: 0.0) * 1000).toInt(),
+                gold = parseGold(doc.getString("blueTeamGold")),
                 towers = num("blueTeamTowers")?.toInt() ?: 0,
                 dragons = num("blueTeamDragons")?.toInt() ?: 0,
             ),
             red = TeamStats(
                 kills = num("redTeamKills")?.toInt() ?: 0,
-                gold = ((num("redTeamGold") ?: 0.0) * 1000).toInt(),
+                gold = parseGold(doc.getString("redTeamGold")),
                 towers = num("redTeamTowers")?.toInt() ?: 0,
                 dragons = num("redTeamDragons")?.toInt() ?: 0,
             ),
         )
+    }
+
+    /**
+     * Or de les notificacions antigues: "48.6k" (o "48.6", sempre en milers) -> 48600.
+     * Abans es feia `toDoubleOrNull()` sobre "48.6k", que fallava per la "k" i deixava l'or a 0.
+     */
+    fun parseGold(value: String?): Int {
+        val clean = value?.trim()?.lowercase()?.replace(",", ".")?.removeSuffix("k")?.trim() ?: return 0
+        val number = clean.toDoubleOrNull() ?: return 0
+        // Si ja ve en unitats (p. ex. "48600") no es multiplica.
+        return if (number >= 1000) number.toInt() else Math.round(number * 1000).toInt()
     }
 
     fun parseInstant(value: String?): Instant? = try {

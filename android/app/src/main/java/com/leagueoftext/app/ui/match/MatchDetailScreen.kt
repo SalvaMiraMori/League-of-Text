@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,8 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -83,6 +86,7 @@ import com.leagueoftext.app.ui.components.EmptyState
 import com.leagueoftext.app.ui.components.LiveBadge
 import com.leagueoftext.app.ui.components.LoadingState
 import com.leagueoftext.app.ui.components.MatchTeamsRow
+import com.leagueoftext.app.ui.components.RefreshableContent
 import com.leagueoftext.app.ui.components.RemoteLogo
 import com.leagueoftext.app.ui.components.SectionHeader
 import com.leagueoftext.app.ui.components.SubscribeButton
@@ -102,6 +106,7 @@ fun MatchDetailRoute(matchId: String, onBack: () -> Unit) {
         onBack = onBack,
         onSelectGame = viewModel::selectGame,
         onReveal = viewModel::revealSpoilers,
+        onRefresh = viewModel::refresh,
         onToggleSubscription = {
             requestPermission()
             viewModel.toggleSubscription()
@@ -115,15 +120,23 @@ fun MatchDetailScreen(
     onBack: () -> Unit,
     onSelectGame: (Int) -> Unit,
     onReveal: () -> Unit,
+    onRefresh: () -> Unit,
     onToggleSubscription: () -> Unit,
 ) {
     val match = state.match
     Column(Modifier.fillMaxWidth()) {
         TopBar(match, state.subscribed, onBack, onToggleSubscription)
-        when {
-            match == null && state.loading -> LoadingState()
-            match == null -> EmptyState(Icons.Filled.Info, stringResource(R.string.match_not_found_title), stringResource(R.string.match_not_found_message))
-            else -> MatchContent(match, state, onSelectGame, onReveal)
+        RefreshableContent(refreshing = state.refreshing, onRefresh = onRefresh) {
+            when {
+                match == null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    if (state.loading) {
+                        LoadingState()
+                    } else {
+                        EmptyState(Icons.Filled.Info, stringResource(R.string.match_not_found_title), stringResource(R.string.match_not_found_message))
+                    }
+                }
+                else -> MatchContent(match, state, onSelectGame, onReveal)
+            }
         }
     }
 }
@@ -180,7 +193,7 @@ private fun MatchContent(
     onReveal: () -> Unit,
 ) {
     val hidden = state.spoilersHidden
-    LazyColumn(contentPadding = PaddingValues(bottom = 32.dp)) {
+    LazyColumn(contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.fillMaxSize()) {
         item(key = "teams") {
             Box(Modifier.background(RiotColors.SurfaceHigh)) {
                 MatchTeamsRow(match, scoreHidden = hidden, onRevealScore = onReveal)
@@ -201,7 +214,7 @@ private fun MatchContent(
             }
             hidden -> item(key = "hidden") { SpoilerCard(onReveal) }
             else -> {
-                item(key = "scoreboard-${game.id}") { Scoreboard(game, state.events.firstOrNull()?.stats) }
+                item(key = "scoreboard-${game.id}") { Scoreboard(game, finalStats(state.events)) }
                 item(key = "timeline-header") { SectionHeader(stringResource(R.string.timeline)) }
                 if (state.events.isEmpty()) {
                     item(key = "no-events") {
@@ -388,10 +401,11 @@ private fun Scoreboard(game: Game, fallbackStats: GameStats?) {
             }
         }
         Spacer(Modifier.height(12.dp))
+        // L'or va primer, amb la barra just a sota: la part blava/vermella és la proporció d'or de cada equip.
+        StatRow(Icons.Filled.Stars, stringResource(R.string.stat_gold), stats.blue.goldLabel, stats.red.goldLabel)
         GoldBar(stats.blue.gold, stats.red.gold)
         Spacer(Modifier.height(8.dp))
         StatRow(Icons.Filled.GpsFixed, stringResource(R.string.stat_kills), stats.blue.kills.toString(), stats.red.kills.toString())
-        StatRow(Icons.Filled.Stars, stringResource(R.string.stat_gold), stats.blue.goldLabel, stats.red.goldLabel)
         StatRow(Icons.Filled.Castle, stringResource(R.string.stat_towers), stats.blue.towers.toString(), stats.red.towers.toString())
         StatRow(Icons.Filled.Whatshot, stringResource(R.string.stat_dragons), stats.blue.dragons.toString(), stats.red.dragons.toString())
         StatRow(Icons.Filled.AutoAwesome, stringResource(R.string.stat_barons), stats.blue.barons.toString(), stats.red.barons.toString())
@@ -399,10 +413,24 @@ private fun Scoreboard(game: Game, fallbackStats: GameStats?) {
     }
 }
 
+/**
+ * Estadístiques finals del joc segons els esdeveniments: les de la notificació "X wins the game"
+ * i, si no n'hi ha, les de l'esdeveniment més recent que en tingui (la llista ve del més nou al més antic).
+ */
+internal fun finalStats(events: List<GameEvent>): GameStats? =
+    events.firstOrNull { it.type == EventType.GAME_END && it.stats != null }?.stats
+        ?: events.firstOrNull { it.stats != null }?.stats
+
+/** Fracció de la barra que correspon a l'equip blau segons l'or (meitat i meitat si no hi ha dades). */
+internal fun blueGoldFraction(blue: Int, red: Int): Float {
+    val total = blue + red
+    if (total <= 0) return 0.5f
+    return (blue.toFloat() / total).coerceIn(0.02f, 0.98f)
+}
+
 @Composable
 private fun GoldBar(blue: Int, red: Int) {
-    val total = (blue + red).coerceAtLeast(1)
-    val blueFraction = (blue.toFloat() / total).coerceIn(0.05f, 0.95f)
+    val blueFraction = blueGoldFraction(blue, red)
     Row(
         Modifier
             .padding(horizontal = 20.dp)

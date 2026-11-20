@@ -69,4 +69,4 @@
 
 Redissenyada amb Jetpack Compose seguint l'estil de Riot Mobile: fons gairebé negre, títols grans, fila de lligues amb selecció blanca, pestanyes amb subratllat daurat, capçaleres per dia, targetes amb el marcador amagat fins que es toca l'ull, i detall amb selector de partides 1-5, marcador en directe (or, kills, torres, dracs, barons, inhibidors) i cronologia d'esdeveniments amb icones i colors per bàndol.
 
-Funcions noves: pestanya «Seguint», seguir partits sense iniciar sessió, obrir el partit en tocar una notificació, notificacions agrupades per partit, compartir un partit, opció per amagar resultats, interruptor general de notificacions i traducció al castellà i a l'anglès.
+Funcions noves: pestanya «Seguint», seguir partits sense iniciar sessió, obrir el partit en tocar una notificació, notificacions agrupades per partit, compartir un partit, opció per amagar resultats, interruptor general de notificacions, estirar cap avall per refrescar les dades (Esports, Seguint i detall del partit) i traducció al castellà i a l'anglès.
