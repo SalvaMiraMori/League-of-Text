@@ -8,7 +8,7 @@ La interfície s'inspira en l'app **Riot Mobile**: fons fosc, títols grans, fil
 
 ## Estat actual
 
-*Novembre de 2026 · versió 2.1*
+*Novembre de 2026 · versió 2.2*
 
 **Fet i funcionant**
 
@@ -18,18 +18,19 @@ La interfície s'inspira en l'app **Riot Mobile**: fons fosc, títols grans, fil
 - **Fila de lligues fixa:** LCK, LEC, LCS, Mundial, MSI i First Stand surten sempre, encara que la pestanya no en tingui partits, i conserven el logotip un cop vist.
 - **Migració del model antic** (`backend/scripts/migrate_legacy_collections.py`): reconstrueix el marcador i el guanyador dels partits acabats (el backend antic no desava l'última victòria), descarta els partits obsolets, estalvia quota de Firestore i es pot reprendre. L'opció `--scores-only` corregeix només els marcadors de partits ja migrats.
 - **Compilació actualitzada:** Kotlin 2.4.21, AGP 9.5.1 i Gradle 9.6, amb el dimoni de Gradle sobre JDK 25.
+- **Dades oficials de GRID:** el backend llegeix els partits de l'API oficial de GRID (Riot Games Open Access) per defecte, amb l'API de LoL Esports com a alternativa (`DATA_SOURCE`). Vegeu [`docs/GRID_API.md`](docs/GRID_API.md).
 
 **Pendent**
 
 - Revocar i regenerar les credencials que encara són a l'historial del repositori antic (vegeu [`docs/CANVIS.md`](docs/CANVIS.md)).
-- Fer el desplegament definitiu del backend amb les credencials noves i comprovar-lo durant una jornada de competició real.
+- Fer el desplegament definitiu del backend amb les credencials noves i comprovar-lo durant una jornada de competició real (amb GRID, quan Open Access hi afegeixi lligues; ara només té Worlds 2026).
 - Afegir tests de la interfície de l'app (ara només hi ha tests unitaris de lectura de dades i de lligues).
 
 ## Arquitectura
 
 ```mermaid
 flowchart LR
-    API[API LoL Esports<br/>calendari · directe · livestats]
+    API[GRID Open Access<br/>o API LoL Esports]
     subgraph AWS[AWS Lambda + EventBridge]
         A[GetScheduledMatches<br/>cada 6 h] --> B[MatchIsLiveScheduler]
         B --> C[MatchIsLive<br/>cada minut]
@@ -51,8 +52,8 @@ flowchart LR
 | `MatchIsLiveScheduler` | Esborra la regla *one-shot* i afegeix el partit a la regla `MatchIsLive`. |
 | `MatchIsLive` | Comprova cada minut si el partit ha començat; quan comença, el passa a `live` i invoca `UpdateMatchState`. Si al cap de 6 h no ha començat, deixa de vigilar-lo. |
 | `UpdateMatchState` | Compta les victòries, envia el marcador i programa la partida següent, o tanca el partit (`completed`). |
-| `GameIsLive` | Espera que hi hagi `livestats` de la partida i la crea. |
-| `UpdateGameState` | Llegeix les instantànies (10 s cadascuna), genera els esdeveniments, els desa i els envia. |
+| `GameIsLive` | Espera que hi hagi dades en directe de la partida i la crea. |
+| `UpdateGameState` | Llegeix l'estat de la partida (GRID: 4 lectures per minut; LoL Esports: instantànies de 10 s), genera els esdeveniments, els desa i els envia. |
 
 ## Estructura del repositori
 
@@ -91,7 +92,8 @@ Si tens dades del model antic (`ScheduledMatches`, `LiveMatches`, `CompletedMatc
 |---|---|---|
 | `google-services.json` | `android/app/` | Consola de Firebase → Configuració del projecte → App Android. Per iniciar sessió amb Google ha d'incloure un client OAuth de tipus web (s'hi afegeix sol en activar el proveïdor Google a Authentication). |
 | Clau del compte de servei de Firebase | AWS Secrets Manager (`FirebaseCredentialsSecretArn`) o, en local, `GOOGLE_APPLICATION_CREDENTIALS` | Consola de Firebase → Comptes de servei → Genera una clau privada |
-| Clau de l'API de LoL Esports | Paràmetre `LolEsportsApiKey` (variable `LOLESPORTS_API_KEY`) | Valor de la capçalera `x-api-key` de `esports-api.lolesports.com` |
+| Clau de l'API de GRID | Paràmetre `GridApiKey` (variable `GRID_API_KEY`); en local, `.env` a l'arrel | Compte de Riot Games Open Access a grid.gg |
+| Clau de l'API de LoL Esports (només amb `DATA_SOURCE=lolesports`) | Paràmetre `LolEsportsApiKey` (variable `LOLESPORTS_API_KEY`) | Valor de la capçalera `x-api-key` de `esports-api.lolesports.com` |
 
 ## Posada en marxa
 
@@ -130,24 +132,27 @@ Desplegament amb AWS SAM:
 cd backend
 aws secretsmanager create-secret --name league-of-text/firebase --secret-string file://clau-firebase.json
 sam build
-sam deploy --guided   # demana LolEsportsApiKey i FirebaseCredentialsSecretArn
+sam deploy --guided   # demana GridApiKey i FirebaseCredentialsSecretArn (DataSource per defecte: grid)
 ```
 
 La plantilla crea les sis Lambdes (Python 3.12, arm64), la capa amb `firebase-admin` i `requests`, el rol IAM i l'execució periòdica de `GetScheduledMatches`. Les altres regles d'EventBridge les creen i les desactiven les mateixes Lambdes, de manera que només s'executen mentre hi ha partits actius.
 
-Variables opcionals: `LEAGUES` (lligues separades per comes), `SCHEDULE_HORIZON_DAYS` (14), `WATCH_BEFORE_MINUTES` (60).
+Variables opcionals: `DATA_SOURCE` (`grid` o `lolesports`, per defecte `grid`), `GRID_TITLE_ID` (si no, es consulta), `LEAGUES` (lligues separades per comes), `SCHEDULE_HORIZON_DAYS` (14), `WATCH_BEFORE_MINUTES` (60).
+
+Per explorar l'API de GRID sense desplegar res: `python backend/scripts/grid_explore.py --help`.
 
 ## Tecnologies
 
 - **App:** Kotlin 2.4.21, Jetpack Compose (BOM 2026.09.00, Compose 1.12, Material 3), Navigation Compose, ViewModel + StateFlow, Coil, Firebase Auth (Google amb Credential Manager), Firestore (memòria cau persistent) i Cloud Messaging. Interfície 100% Compose, sense layouts XML. `minSdk` 24, `compileSdk`/`targetSdk` 37. Idiomes: català, castellà i anglès.
 - **Compilació:** Gradle 9.6 (dimoni sobre JDK 25), Android Gradle Plugin 9.5.1 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
-- **Backend:** Python 3.12, `requests`, `firebase-admin`, `boto3`, AWS Lambda, Amazon EventBridge, AWS SAM.
+- **Backend:** Python 3.12, `requests`, `firebase-admin`, `boto3`, AWS Lambda, Amazon EventBridge, AWS SAM. Dades: API GraphQL de GRID (Open Access) o API de LoL Esports.
 
 ## Limitacions conegudes
 
-- L'API de LoL Esports no és oficial ni està documentada i pot canviar sense avís.
+- **GRID (Open Access):** les dades en directe arriben amb 5 minuts de retard, el límit és de 6 lectures per minut per sèrie i de moment només hi ha Worlds 2026. No dona la posició dels jugadors ni els enllaços de les retransmissions.
+- L'API de LoL Esports (alternativa) no és oficial ni està documentada i pot canviar sense avís.
 - Els textos de les notificacions es generen al backend en anglès (la terminologia del joc és en anglès).
-- Si l'API no diu qui ha guanyat una partida al cap d'uns minuts, el backend l'estima a partir de l'últim fotograma (inhibidors, torres, kills i or).
+- Amb l'API de LoL Esports, si no diu qui ha guanyat una partida al cap d'uns minuts, el backend l'estima a partir de l'últim fotograma (inhibidors, torres, kills i or). GRID sempre indica el guanyador.
 
 ## Autor
 

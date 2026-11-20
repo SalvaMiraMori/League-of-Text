@@ -23,6 +23,9 @@ captures/
 .idea/
 .kotlin/
 
+# ---- Respostes de l'API de GRID (grid_explore.py): dades de GRID, no es versionen ----
+backend/*.json
+
 # ---- Python / AWS ----
 __pycache__/
 *.py[cod]

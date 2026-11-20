@@ -1,6 +1,6 @@
 """MatchIsLive: comprova cada minut si un partit ha començat.
 
-Quan el partit apareix com a ``inProgress`` a l'API de partits en directe:
+Quan la font de dades (GRID o LoL Esports) diu que el partit és en directe:
 
 * el passa a ``state = live`` (refrescant els equips) i hi desa l'estat inicial;
 * treu el seu objectiu de la regla ``MatchIsLive``;
@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from .. import lolesports, store
+from .. import datasource, lolesports, store
 from ..match import Match
 from ..scheduling import MATCH_IS_LIVE, UPDATE_MATCH_STATE, Scheduler, utcnow
 
@@ -35,14 +35,7 @@ def lambda_handler(event, context):
         scheduler.remove_polling_target(MATCH_IS_LIVE, target_id)
         return {"matchId": match_id, "live": True}
 
-    live_event = next(
-        (
-            e
-            for e in lolesports.get_live_events()
-            if str((e.get("match") or {}).get("id") or e.get("id")) == match_id and e.get("state") == "inProgress"
-        ),
-        None,
-    )
+    live_event = datasource.api().get_live_event(match_id)
 
     if live_event is None:
         start = event.get("startTime") or (existing or {}).get("startTime")

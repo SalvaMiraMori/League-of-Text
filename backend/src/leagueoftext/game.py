@@ -30,6 +30,9 @@ SPREE_MESSAGES = {
 LEGENDARY = "is legendary!"
 MULTIKILL_WINDOW_S = 10
 PENTAKILL_WINDOW_S = 30
+#: Si en veure el joc per primera vegada ja havien passat més esdeveniments que aquests, no
+#: s'envien un per un: l'avís d'inici diu que el joc ja està en marxa (i porta les estadístiques).
+CATCH_UP_MAX_EVENTS = 5
 
 
 def format_clock(seconds: float) -> str:
@@ -40,6 +43,21 @@ def format_clock(seconds: float) -> str:
     if hours:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     return f"{minutes:02d}:{secs:02d}"
+
+
+def _multikill_from_counts(previous: dict, current: dict) -> Optional[int]:
+    """Multikill segons els comptadors de GRID (``{"2": dobles, "3": triples…}``).
+
+    Retorna la multikill més alta que ha augmentat (1 si només hi ha kills soltes), o ``None``
+    si el fotograma no porta comptadors (feed de LoL Esports: es calcula amb finestres de temps).
+    """
+    if "multikills" not in current:
+        return None
+    before = previous.get("multikills") or {}
+    increased = [
+        int(size) for size, count in (current.get("multikills") or {}).items() if int(count) > int(before.get(size, 0))
+    ]
+    return min(5, max(increased)) if increased else 1
 
 
 # --------------------------------------------------------------------------- models
@@ -177,6 +195,12 @@ class Participant:
             "killingSpree": self.killing_spree,
         }
 
+    def register_counted_kills(self, count: int, multikill: int, at: datetime) -> None:
+        """Com :meth:`register_kills`, però amb la multikill que ja indica la font (GRID)."""
+        self.multikill = multikill
+        self.last_kill_at = at
+        self.killing_spree += count
+
     def register_kills(self, count: int, at: datetime) -> int:
         """Actualitza el comptador de multikill i retorna el valor resultant (1..5)."""
         window = PENTAKILL_WINDOW_S if self.multikill == 4 else MULTIKILL_WINDOW_S
@@ -276,7 +300,22 @@ class Game:
         }
         game = cls(match_id, game_id, game_number, teams, parse_timestamp(first_frame["rfc460Timestamp"]), first_frame)
         number = f"game {game_number} " if game_number > 0 else ""
-        game._emit("game_start", f"{teams[BLUE].name} vs {teams[RED].name} {number}has just started!")
+        title = f"{teams[BLUE].name} vs {teams[RED].name} {number}"
+
+        game._catch_up(first_frame)
+        missed = game.drain_events()
+        game.seq = 0
+        if len(missed) > CATCH_UP_MAX_EVENTS:
+            game._emit("game_start", f"{title}is already in progress ({format_clock(game.playing_seconds)}).")
+            return game
+        playing = game.playing_seconds
+        game.playing_seconds = 0
+        game._emit("game_start", f"{title}has just started!")
+        game.playing_seconds = playing
+        for event in missed:
+            game.seq += 1
+            event.seq = game.seq
+            game.pending.append(event)
         return game
 
     @classmethod
@@ -340,6 +379,7 @@ class Game:
             return
         state = frame.get("gameState")
         now = parse_timestamp(frame["rfc460Timestamp"])
+        clock = frame.get("clockSeconds")  # GRID dona el temps de joc; livestats no
         last = self.last_frame.get("rfc460Timestamp")
         if last and now <= parse_timestamp(last):
             # Les finestres del feed es poden solapar: un fotograma antic donaria diferències falses.
@@ -348,7 +388,7 @@ class Game:
         if state == "paused":
             if not self.is_paused:
                 self.paused_since = now
-                self._update_clock(now)
+                self._update_clock(now, clock)
                 self.last_frame = frame
                 self._emit("pause", "The game has been paused!")
             else:
@@ -359,12 +399,12 @@ class Game:
             pause_length = now - self.paused_since
             self.paused_seconds += pause_length.total_seconds()
             self.paused_since = None
-            self._update_clock(now)
+            self._update_clock(now, clock)
             self._emit("unpause", f"The game has been unpaused!\nTime paused: {format_clock(pause_length.total_seconds())}")
 
         previous = self.last_frame
         self.last_frame = frame
-        self._update_clock(now)
+        self._update_clock(now, clock)
 
         if state in ("in_game", "finished") and previous.get("blueTeam") and frame.get("blueTeam"):
             for side in SIDES:
@@ -377,7 +417,10 @@ class Game:
         if state == "finished":
             self.ended = True
 
-    def _update_clock(self, now: datetime) -> None:
+    def _update_clock(self, now: datetime, clock: float | None = None) -> None:
+        if clock is not None:
+            self.playing_seconds = max(0.0, float(clock))
+            return
         self.playing_seconds = max(0.0, (now - self.starting_time).total_seconds() - self.paused_seconds)
 
     def _team_events(self, side: str, before: TeamStats, after: TeamStats) -> None:
@@ -419,7 +462,11 @@ class Game:
                     self.first_blood = True
                     event_type = "first_blood"
                     lines.append(f"{participant.summoner_name} got the first blood!")
-                multikill = participant.register_kills(new_kills, now)
+                multikill = _multikill_from_counts(prev, current)
+                if multikill is None:
+                    multikill = participant.register_kills(new_kills, now)
+                else:
+                    participant.register_counted_kills(new_kills, multikill, now)
                 if multikill > 1:
                     event_type = "multikill"
                 lines.append(f"{participant.summoner_name} got a {MULTIKILL_NAMES[multikill]}.")
@@ -431,6 +478,63 @@ class Game:
             if new_deaths > 0:
                 participant.killing_spree = 0
                 participant.multikill = 0
+
+    # ------------------------------------------------------------------ inici tardà
+
+    def _catch_up(self, frame: dict) -> None:
+        """Esdeveniments que ja havien passat quan es veu el joc per primera vegada.
+
+        Si ``GameIsLive`` troba el joc quan ja fa estona que ha començat (p. ex. una Lambda
+        endarrerida), el primer fotograma ja porta kills, torres o dracs. Es comparen amb un
+        joc a zero perquè no es perdin. Com que no se sap l'ordre en què han passat:
+
+        * les kills s'anuncien totals per jugador ("got 3 kills"), sense ratxes;
+        * la primera sang només s'atribueix si el fotograma diu qui l'ha feta (``firstKill``, GRID);
+        * les multikills només surten si la font les compta (GRID).
+        """
+        if not frame.get("blueTeam") or not frame.get("redTeam"):
+            return
+        self._update_clock(parse_timestamp(frame["rfc460Timestamp"]), frame.get("clockSeconds"))
+        towers = sum(int(frame[f"{side}Team"].get("towers", 0)) for side in SIDES)
+        first_tower_side = next((side for side in SIDES if frame[f"{side}Team"].get("firstTower")), None)
+        if towers and first_tower_side is None:
+            self.first_tower = True  # no se sap qui l'ha feta: cap torre no s'anuncia com la primera
+        for side in sorted(SIDES, key=lambda side: side != first_tower_side):
+            self._team_events(side, TeamStats(), TeamStats.from_frame(frame[f"{side}Team"]))
+
+        participants = [(side, p) for side in SIDES for p in frame[f"{side}Team"].get("participants", [])]
+        kills = sum(int(p.get("kills", 0)) for _, p in participants)
+        first = next((int(p["participantId"]) for _, p in participants if p.get("firstKill")), None)
+        # Primer qui va fer la primera sang, perquè el missatge surti abans.
+        participants.sort(key=lambda sp: int(sp[1]["participantId"]) != first)
+        for side, current in participants:
+            participant = self.teams[side].participants.get(int(current["participantId"]))
+            count = int(current.get("kills", 0))
+            if participant is None:
+                continue
+            participant.killing_spree = count if int(current.get("deaths", 0)) == 0 else 0
+            if count <= 0:
+                continue
+            name = participant.summoner_name
+            lines, event_type = [], "kill"
+            if participant.participant_id == first and not self.first_blood:
+                self.first_blood = True
+                event_type = "first_blood"
+                lines.append(f"{name} got the first blood!")
+            lines.append(f"{name} got a kill." if count == 1 else f"{name} got {count} kills.")
+            best = max((int(k) for k, n in (current.get("multikills") or {}).items() if int(n) > 0), default=1)
+            if best > 1:
+                event_type = "multikill" if event_type == "kill" else event_type
+                lines.append(f"{name} got a {MULTIKILL_NAMES[min(best, 5)]}.")
+            self._emit(event_type, "\n".join(lines), side)
+        if kills:
+            self.first_blood = True  # les kills següents ja no poden ser la primera sang
+
+        if frame.get("gameState") == "paused":
+            self.paused_since = parse_timestamp(frame["rfc460Timestamp"])
+            self._emit("pause", "The game has been paused!")
+        elif frame.get("gameState") == "finished":
+            self.ended = True
 
     # ------------------------------------------------------------------ final
 

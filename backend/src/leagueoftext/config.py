@@ -34,6 +34,32 @@ def watch_before_minutes() -> int:
     return int(os.environ.get("WATCH_BEFORE_MINUTES", DEFAULT_WATCH_BEFORE_MINUTES))
 
 
+#: Fonts de dades: ``grid`` (API oficial, Riot Games Open Access) o ``lolesports`` (API no oficial).
+DATA_SOURCES = ("grid", "lolesports")
+DEFAULT_DATA_SOURCE = "grid"
+
+
+def data_source() -> str:
+    """Font de les dades dels partits (variable ``DATA_SOURCE``)."""
+    value = (os.environ.get("DATA_SOURCE") or DEFAULT_DATA_SOURCE).strip().lower()
+    if value not in DATA_SOURCES:
+        raise RuntimeError(f"DATA_SOURCE ha de ser una de {', '.join(DATA_SOURCES)} (és '{value}')")
+    return value
+
+
+def grid_api_key() -> str:
+    """Clau de l'API de GRID (capçalera ``x-api-key``)."""
+    key = os.environ.get("GRID_API_KEY")
+    if not key:
+        raise RuntimeError("Falta la variable d'entorn GRID_API_KEY (clau de Riot Games Open Access a grid.gg).")
+    return key.strip()
+
+
+def grid_title_id() -> str | None:
+    """Id de League of Legends a GRID. Opcional: si no hi és, es consulta a l'API."""
+    return (os.environ.get("GRID_TITLE_ID") or "").strip() or None
+
+
 def lolesports_api_key() -> str:
     """Clau de la capçalera ``x-api-key`` de l'API de LoL Esports."""
     key = os.environ.get("LOLESPORTS_API_KEY")

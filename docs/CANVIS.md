@@ -70,3 +70,15 @@
 Redissenyada amb Jetpack Compose seguint l'estil de Riot Mobile: fons gairebé negre, títols grans, fila de lligues amb selecció blanca, pestanyes amb subratllat daurat, capçaleres per dia, targetes amb el marcador amagat fins que es toca l'ull, i detall amb selector de partides 1-5, marcador en directe (or, kills, torres, dracs, barons, inhibidors) i cronologia d'esdeveniments amb icones i colors per bàndol.
 
 Funcions noves: pestanya «Seguint», seguir partits sense iniciar sessió, obrir el partit en tocar una notificació, notificacions agrupades per partit, compartir un partit, opció per amagar resultats, interruptor general de notificacions, estirar cap avall per refrescar les dades (Esports, Seguint i detall del partit) i traducció al castellà i a l'anglès.
+
+## Versió 2.2: dades oficials de GRID
+
+- Nou client `backend/src/leagueoftext/grid.py` per a l'API oficial de GRID (Riot Games Open Access): calendari amb Central Data i estat de les sèries amb Series State (GraphQL, capçalera `x-api-key`).
+- El client retorna les dades amb la mateixa forma que `lolesports.py` (esdeveniments del calendari i finestres de `livestats`), de manera que `Match`, `Game`, Firestore i l'app no canvien. La font es tria amb `DATA_SOURCE` (`grid` per defecte, o `lolesports`) a `datasource.py`.
+- Com que GRID no dona els ids dels jocs abans que comencin, es fan servir ids sintètics `<sèrie>-<número>` (p. ex. `3012986-2`).
+- `UpdateGameState` amb GRID llegeix l'estat 4 vegades per execució, cada 10 s (el límit d'Open Access és 6 per minut i sèrie), i ja no ha d'estimar el guanyador: GRID l'indica.
+- `Game`: si el fotograma porta el rellotge de joc (`clockSeconds`) es fa servir en lloc de calcular-lo amb les marques de temps, i si porta els comptadors de multikills de GRID es fan servir en lloc de la finestra de 10 s.
+- Plantilla SAM: paràmetres nous `DataSource`, `GridApiKey` i `GridTitleId`; `LolEsportsApiKey` passa a ser opcional.
+- Inici tardà: si `GameIsLive` troba el joc ja començat, `Game.start` anuncia el que s'havia perdut (kills totals per jugador; primera sang i primera torre només si la font diu qui les va fer). Si són més de 5 esdeveniments, l'avís d'inici diu que el joc ja està en marxa en lloc d'enviar-los un per un.
+- `backend/scripts/grid_explore.py` per provar les consultes i desar les respostes en JSON. Documentació a `docs/GRID_API.md`.
+- Tests nous (`tests/test_grid.py` i el flux complet amb GRID a `tests/test_handlers_flow.py`).

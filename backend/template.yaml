@@ -1,12 +1,27 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: League of Text - backend de seguiment de partits de LoL Esports
+Description: League of Text - backend de seguiment de partits de LoL Esports (GRID o API de LoL Esports)
 
 Parameters:
+  DataSource:
+    Type: String
+    Default: grid
+    AllowedValues: [grid, lolesports]
+    Description: Font de dades dels partits (grid = API oficial de GRID, lolesports = API no oficial)
+  GridApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Clau de l'API de GRID (Riot Games Open Access). Obligatòria si DataSource = grid
+  GridTitleId:
+    Type: String
+    Default: ""
+    Description: Id de League of Legends a GRID (opcional; si és buit es consulta a l'API)
   LolEsportsApiKey:
     Type: String
     NoEcho: true
-    Description: Valor de la capçalera x-api-key de esports-api.lolesports.com
+    Default: ""
+    Description: Valor de la capçalera x-api-key de esports-api.lolesports.com. Obligatòria si DataSource = lolesports
   FirebaseCredentialsSecretArn:
     Type: String
     Description: ARN del secret de Secrets Manager amb el JSON del compte de servei de Firebase
@@ -25,6 +40,9 @@ Globals:
     Layers: [!Ref DependenciesLayer]
     Environment:
       Variables:
+        DATA_SOURCE: !Ref DataSource
+        GRID_API_KEY: !Ref GridApiKey
+        GRID_TITLE_ID: !Ref GridTitleId
         LOLESPORTS_API_KEY: !Ref LolEsportsApiKey
         FIREBASE_CREDENTIALS_SECRET_ARN: !Ref FirebaseCredentialsSecretArn
         LEAGUES: !Ref Leagues

@@ -1,4 +1,4 @@
-"""GameIsLive: espera (cada minut) que el feed ``livestats`` del joc estigui disponible.
+"""GameIsLive: espera (cada minut) que hi hagi dades en directe del joc (GRID o ``livestats``).
 
 Quan ho està, crea el :class:`~leagueoftext.game.Game`, envia l'avís d'inici, passa el
 joc a la regla ``UpdateGameState`` i treu el seu objectiu de ``GameIsLive``.
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import lolesports, messaging, store
+from .. import datasource, lolesports, messaging, store
 from ..game import Game
 from ..scheduling import GAME_IS_LIVE, UPDATE_GAME_STATE, Scheduler
 
@@ -26,7 +26,7 @@ def lambda_handler(event, context):
         scheduler.remove_polling_target(GAME_IS_LIVE, target_id)
         return {"gameId": game_id, "started": True}
 
-    window = lolesports.get_game_window(game_id)
+    window = datasource.api().get_game_window(game_id)
     if window is None or "gameMetadata" not in window:
         log.info("El joc %s encara no té dades en directe", game_id)
         return {"gameId": game_id, "started": False}

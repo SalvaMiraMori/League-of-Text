@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from .. import config, lolesports, store
+from .. import config, datasource, lolesports, store
 from ..scheduling import MATCH_IS_LIVE_SCHEDULER, Scheduler, is_soon, rule_name, utcnow
 
 log = logging.getLogger()
@@ -30,7 +30,7 @@ def lambda_handler(event, context):
     watch_before = timedelta(minutes=config.watch_before_minutes())
     scheduled, updated, skipped = 0, 0, 0
 
-    for api_event in lolesports.iter_schedule_events("newer"):
+    for api_event in datasource.api().iter_schedule_events("newer"):
         if api_event.get("type", "match") != "match":
             continue
         if (api_event.get("league") or {}).get("name") not in leagues:

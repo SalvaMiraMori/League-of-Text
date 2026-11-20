@@ -91,6 +91,18 @@ def get_live_events() -> list[dict]:
     return (data.get("schedule") or data.get("live") or {}).get("events", []) or []
 
 
+def get_live_event(match_id: str) -> dict | None:
+    """L'esdeveniment del partit si és en directe (``state = inProgress``), o ``None``."""
+    return next(
+        (
+            e
+            for e in get_live_events()
+            if str((e.get("match") or {}).get("id") or e.get("id")) == str(match_id) and e.get("state") == "inProgress"
+        ),
+        None,
+    )
+
+
 def get_event_details(match_id: str) -> dict | None:
     """Detalls d'un partit (equips, resultat i jocs). Retorna ``None`` si l'API no respon."""
     try:

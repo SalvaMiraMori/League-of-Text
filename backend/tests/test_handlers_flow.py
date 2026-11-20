@@ -73,6 +73,7 @@ class FakeStore:
 
 @pytest.fixture
 def env(monkeypatch):
+    monkeypatch.setenv("DATA_SOURCE", "lolesports")
     fake = FakeStore()
     for name in ("get_match", "upsert_scheduled_match", "mark_match_live", "load_match", "save_match",
                  "delete_match", "load_game", "save_game"):
@@ -176,3 +177,80 @@ def test_postponed_match_is_dropped(env, monkeypatch):
 def test_scheduler_builds_arns():
     scheduler = scheduling.Scheduler(CONTEXT.invoked_function_arn)
     assert scheduler.function_arn("GameIsLive") == "arn:aws:lambda:eu-west-3:123456789012:function:GameIsLive"
+
+
+def test_full_match_flow_with_grid(env, monkeypatch):
+    """El mateix recorregut amb GRID: Bo3 que GEN guanya 2-0, amb l'API de GRID simulada."""
+    from test_grid import BLG, GEN, game_state, series, state
+
+    from leagueoftext import grid
+
+    monkeypatch.setenv("DATA_SOURCE", "grid")
+    monkeypatch.setattr(grid, "lol_title_id", lambda: "3")
+    monkeypatch.setattr(update_game_state, "sleep", lambda seconds: None)
+    bo3 = series("777", fmt="Bo3", tournament="Worlds - 2099 (Swiss: Swiss)", short="Swiss", start="2099-01-01T10:00:00Z")
+
+    def fake_graphql(url, query, variables=None):
+        if "allSeries" in query:
+            return {"allSeries": {"edges": [{"node": bo3}], "pageInfo": {"hasNextPage": False}}}
+        return {"series": bo3}
+
+    current = {"state": None}
+    monkeypatch.setattr(grid, "graphql", fake_graphql)
+    monkeypatch.setattr(grid, "get_series_state", lambda sid, max_age=0: current["state"])
+
+    # 1-2. Calendari i MatchIsLiveScheduler.
+    monkeypatch.setattr(get_scheduled_matches, "utcnow", lambda: lolesports.parse_timestamp("2098-12-25T00:00:00Z"))
+    monkeypatch.setattr(grid, "iter_schedule_events",
+                        lambda direction="newer", _orig=grid.iter_schedule_events:
+                        _orig(now=lolesports.parse_timestamp("2098-12-25T00:00:00Z")))
+    assert get_scheduled_matches.lambda_handler({}, CONTEXT)["scheduled"] == 1
+    doc = env.store.matches["777"]
+    assert doc["league"]["name"] == "Worlds" and doc["blockName"] == "Swiss" and doc["bestOf"] == 3
+    match_is_live_scheduler.lambda_handler({"matchId": "777"}, CONTEXT)
+
+    # 3. MatchIsLive: GRID encara no té estat; després la sèrie ha començat.
+    assert match_is_live.lambda_handler({"matchId": "777"}, CONTEXT)["live"] is False
+    current["state"] = state([], series_id="777")
+    assert match_is_live.lambda_handler({"matchId": "777"}, CONTEXT)["live"] is True
+
+    # 4. UpdateMatchState programa el joc 1 (id sintètic).
+    update_match_state.lambda_handler({"matchId": "777"}, CONTEXT)
+    assert env.pushes[-1] == "The match has just started!"
+    payload = env.polling["GameIsLive-777-1"]
+
+    # 5. GameIsLive: espera que el joc 1 aparegui a Series State.
+    assert game_is_live.lambda_handler(payload, CONTEXT)["started"] is False
+    current["state"] = state([game_state(1, clock=30)], updated="2099-01-01T10:10:00.000Z", series_id="777")
+    assert game_is_live.lambda_handler(payload, CONTEXT)["started"] is True
+    assert env.pushes[-1] == "GEN vs BLG game 1 has just started!"
+
+    # 6. UpdateGameState: primera sang i final del joc (4 lectures per execució com a màxim).
+    current["state"] = state([game_state(1, clock=400, blue_kills={"Chovy": 1})],
+                             updated="2099-01-01T10:17:00.000Z", series_id="777")
+    result = update_game_state.lambda_handler(env.polling["UpdateGameState-777-1"], CONTEXT)
+    assert result["windows"] == grid.POLLS_PER_RUN and result["winner"] is None
+    assert "Chovy got the first blood!\nChovy got a kill." in env.pushes
+
+    current["state"] = state([game_state(1, clock=1900, finished=True, blue_won=True, blue_kills={"Chovy": 1},
+                                         blue_objectives={"destroyTower": 9, "destroyNexus": 1})],
+                             updated="2099-01-01T10:42:00.000Z", series_id="777")
+    result = update_game_state.lambda_handler(env.polling["UpdateGameState-777-1"], CONTEXT)
+    assert result["windows"] == 1 and result["winner"] == GEN  # s'atura en veure el final
+    assert env.pushes[-1] == "GEN wins the game!"
+    update_match_state.lambda_handler({"matchId": "777", "gameId": "777-1"}, CONTEXT)
+    assert env.pushes[-1] == "GEN  1 - 0  BLG"
+    assert "GameIsLive-777-2" in env.polling
+
+    # 7. Joc 2 i final del partit.
+    g1 = game_state(1, clock=1900, finished=True, blue_won=True)
+    current["state"] = state([g1, game_state(2, clock=20)], updated="2099-01-01T11:00:00.000Z", series_id="777")
+    game_is_live.lambda_handler(env.polling["GameIsLive-777-2"], CONTEXT)
+    current["state"] = state([g1, game_state(2, clock=1700, finished=True, blue_won=True)],
+                             updated="2099-01-01T11:30:00.000Z", series_id="777")
+    update_game_state.lambda_handler(env.polling["UpdateGameState-777-2"], CONTEXT)
+    update_match_state.lambda_handler({"matchId": "777", "gameId": "777-2"}, CONTEXT)
+    assert env.store.matches["777"]["state"] == "completed"
+    assert env.store.matches["777"]["winnerId"] == GEN
+    assert env.pushes[-1] == "GEN  2 - 0  BLG\nGEN WINS THE MATCH!"
+    assert BLG in env.store.matches["777"]["score"]

@@ -1,16 +1,20 @@
-"""UpdateGameState: llegeix les instantànies d'un joc en curs (cada minut, 10 s per finestra).
+"""UpdateGameState: segueix un joc en curs (s'executa cada minut).
 
-A cada execució processa unes quantes finestres de ``livestats`` a partir de ``date``,
-genera els esdeveniments, els desa i els envia, i guarda la nova ``date`` a l'objectiu
-de la regla. Quan el joc acaba i se'n sap el guanyador, treu l'objectiu i invoca
-``UpdateMatchState``.
+Genera els esdeveniments, els desa i els envia. Quan el joc acaba i se'n sap el guanyador,
+treu l'objectiu de la regla i invoca ``UpdateMatchState``.
+
+* **GRID:** cada lectura retorna l'estat actual sencer. Es llegeix ``grid.POLLS_PER_RUN``
+  vegades per execució, cada ``grid.POLL_INTERVAL_S`` segons (el límit és 6 per minut i sèrie).
+* **LoL Esports:** es processen finestres de ``livestats`` de 10 s a partir de ``date``, i es
+  guarda la nova ``date`` a l'objectiu de la regla.
 """
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 
-from .. import lolesports, messaging, store
+from .. import datasource, grid, lolesports, messaging, store
 from ..scheduling import UPDATE_GAME_STATE, UPDATE_MATCH_STATE, Scheduler, utcnow
 
 log = logging.getLogger()
@@ -21,18 +25,25 @@ MAX_WINDOWS_PER_RUN = 15  # per recuperar el retard si l'execució anterior va a
 CATCH_UP_LAG = timedelta(minutes=2)
 WINNER_ATTEMPTS_BEFORE_GUESS = 5
 
+sleep = time.sleep  # substituïble als tests
 
-def lambda_handler(event, context):
-    match_id = str(event["matchId"])
-    game_id = str(event["gameId"])
-    date = lolesports.parse_timestamp(event["date"])
-    scheduler = Scheduler.from_context(context)
-    target_id = f"{UPDATE_GAME_STATE}-{game_id}"
 
-    game = store.load_game(match_id, game_id)
-    if game is None:
-        raise RuntimeError(f"El joc {game_id} no té estat desat")
+def _poll_grid(game, game_id: str) -> int:
+    """Llegeix l'estat de GRID unes quantes vegades durant l'execució. Retorna quantes."""
+    polls = 0
+    for attempt in range(grid.POLLS_PER_RUN):
+        if attempt:
+            sleep(grid.POLL_INTERVAL_S)
+        window = grid.get_game_window(game_id, previous_frame=game.last_frame)
+        polls += 1
+        if window is not None:
+            game.update(window["frames"][0])
+        if game.ended:
+            break
+    return polls
 
+
+def _poll_livestats(game, game_id: str, date):
     windows = 0
     while not game.ended and windows < MAX_WINDOWS_PER_RUN:
         if windows >= WINDOWS_PER_RUN and date > utcnow() - CATCH_UP_LAG:
@@ -47,10 +58,30 @@ def lambda_handler(event, context):
                 break
         date += timedelta(seconds=10)
         windows += 1
+    return windows, date
+
+
+def lambda_handler(event, context):
+    match_id = str(event["matchId"])
+    game_id = str(event["gameId"])
+    date = lolesports.parse_timestamp(event["date"])
+    scheduler = Scheduler.from_context(context)
+    target_id = f"{UPDATE_GAME_STATE}-{game_id}"
+    source = datasource.api()
+
+    game = store.load_game(match_id, game_id)
+    if game is None:
+        raise RuntimeError(f"El joc {game_id} no té estat desat")
+
+    if datasource.is_grid():
+        windows = _poll_grid(game, game_id)
+        date = utcnow()
+    else:
+        windows, date = _poll_livestats(game, game_id, date)
 
     if game.ended and not game.winner:
         match = store.load_match(match_id)
-        winner = lolesports.find_game_winner(match_id, game_id, match.wins() if match else {})
+        winner = source.find_game_winner(match_id, game_id, match.wins() if match else {})
         game.winner_attempts += 1
         if winner is None and game.winner_attempts >= WINNER_ATTEMPTS_BEFORE_GUESS:
             winner = game.guess_winner()

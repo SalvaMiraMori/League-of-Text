@@ -158,3 +158,19 @@ def test_format_clock():
     assert format_clock(0) == "00:00"
     assert format_clock(754) == "12:34"
     assert format_clock(3754) == "1:02:34"
+
+
+def test_late_start_with_livestats_does_not_guess_first_blood_or_multikills(window, make_frame, make_team, deepcopy):
+    late = deepcopy(window)
+    late["frames"] = [make_frame("2026-11-14T08:06:00.000Z", blue=make_team(kills={1: 3}, towers=1),
+                                 red=make_team(kills={6: 1}, deaths={6: 1}, offset=5))]
+    game = Game.start("m1", "g1", late, 2, {BLUE_ID: "T1", RED_ID: "GEN"})
+    assert texts(game.drain_events()) == [
+        "T1 vs GEN game 2 has just started!",
+        "T1 destroyed a tower.",  # el feed no diu qui va fer la primera torre
+        "T1 Player1 got 3 kills.",  # ni l'ordre de les kills: res de primera sang ni de triple
+        "GEN Player6 got a kill.",
+    ]
+    assert game.first_blood and game.first_tower
+    assert game.teams["blue"].participants[1].killing_spree == 3
+    assert game.teams["red"].participants[6].killing_spree == 0
