@@ -49,7 +49,6 @@
     <string name="stat_dragons">Dragones</string>
     <string name="stat_barons">Barones</string>
     <string name="stat_inhibitors">Inhibidores</string>
-    <string name="event_stats">%1$s %2$d–%3$d %4$s · Oro %5$s–%6$s · Torres %7$d–%8$d · Dragones %9$d–%10$d</string>
     <string name="share_text">%1$s · %2$s (%3$s). ¡Síguelo con League of Text!</string>
     <string name="profile_guest">Invitado</string>
     <string name="profile_guest_hint">Inicia sesión para guardar en tu cuenta los partidos que sigues.</string>
@@ -67,5 +66,21 @@
     <plurals name="following_count">
         <item quantity="one">Sigues %d partido</item>
         <item quantity="other">Sigues %d partidos</item>
+    </plurals>
+    <string name="collapse_day">Ocultar los partidos de este día</string>
+    <string name="expand_day">Mostrar los partidos de este día</string>
+    <string name="setting_calendar_view">Vista de calendario</string>
+    <string name="setting_calendar_view_desc">Muestra los partidos en un calendario en lugar de una lista de días.</string>
+    <string name="calendar_month">Mes</string>
+    <string name="calendar_week">Semana</string>
+    <string name="calendar_day">Día</string>
+    <string name="calendar_today">Hoy</string>
+    <string name="calendar_previous">Anterior</string>
+    <string name="calendar_next">Siguiente</string>
+    <string name="calendar_no_matches_day">No hay partidos este día.</string>
+    <string name="calendar_no_matches_week">No hay partidos esta semana.</string>
+    <plurals name="calendar_matches">
+        <item quantity="one">%d partido</item>
+        <item quantity="other">%d partidos</item>
     </plurals>
 </resources>

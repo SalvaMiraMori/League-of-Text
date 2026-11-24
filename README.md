@@ -13,7 +13,7 @@ La interfície s'inspira en l'app **Riot Mobile**: fons fosc, títols grans, fil
 **Fet i funcionant**
 
 - **Backend complet:** les sis Lambdes, la plantilla d'AWS SAM, el model de dades unificat a `Matches` i la generació d'esdeveniments (primera sang, multikills, torres, dracs, barons, inhibidors, pauses i resultat). Tot amb tests de pytest, inclòs el flux sencer amb dobles en memòria.
-- **App Android:** pantalles Esports (Pròxims · En directe · Resultats, amb filtre per lliga), detall del partit amb selector de partides i cronologia, Seguint i Perfil. Inici de sessió amb Google, seguiment de partits sense compte, notificacions push agrupades per partit i traducció al català, castellà i anglès.
+- **App Android:** pantalles Esports (Pròxims · En directe · Resultats, amb filtre per una o diverses lligues i, opcionalment, vista de calendari mensual, setmanal o diària que s'activa al Perfil), detall del partit amb selector de partides i cronologia, Seguint i Perfil. Inici de sessió amb Google, seguiment de partits sense compte, notificacions push agrupades per partit i traducció al català, castellà i anglès.
 - **Estirar per refrescar** a Esports, Seguint i al detall del partit: força una lectura al servidor i reinicia els listeners que havien fallat sense esperar el reintent.
 - **Fila de lligues fixa:** LCK, LEC, LCS, Mundial, MSI i First Stand surten sempre, encara que la pestanya no en tingui partits, i conserven el logotip un cop vist.
 - **Migració del model antic** (`backend/scripts/migrate_legacy_collections.py`): reconstrueix el marcador i el guanyador dels partits acabats (el backend antic no desava l'última victòria), descarta els partits obsolets, estalvia quota de Firestore i es pot reprendre. L'opció `--scores-only` corregeix només els marcadors de partits ja migrats.
@@ -68,7 +68,7 @@ backend/                 Backend en Python per a AWS Lambda
     handlers/            Un mòdul per Lambda
   tests/                 Tests amb pytest (lògica i flux complet amb dobles en memòria)
   template.yaml          Plantilla d'AWS SAM (6 Lambdes, capa de dependències i rol IAM)
-  scripts/               Migració de les dades del model antic
+  scripts/               Migració del model antic, explorador de GRID i importació de partits ja jugats
 firebase/                Regles de seguretat i índexs de Firestore
 docs/                    Documentació addicional
 ```
@@ -92,7 +92,7 @@ Si tens dades del model antic (`ScheduledMatches`, `LiveMatches`, `CompletedMatc
 |---|---|---|
 | `google-services.json` | `android/app/` | Consola de Firebase → Configuració del projecte → App Android. Per iniciar sessió amb Google ha d'incloure un client OAuth de tipus web (s'hi afegeix sol en activar el proveïdor Google a Authentication). |
 | Clau del compte de servei de Firebase | AWS Secrets Manager (`FirebaseCredentialsSecretArn`) o, en local, `GOOGLE_APPLICATION_CREDENTIALS` | Consola de Firebase → Comptes de servei → Genera una clau privada |
-| Clau de l'API de GRID | Paràmetre `GridApiKey` (variable `GRID_API_KEY`); en local, `.env` a l'arrel | Compte de Riot Games Open Access a grid.gg |
+| Clau de l'API de GRID | AWS Secrets Manager (`GridApiKeySecretArn`); en local, `GRID_API_KEY` al `.env` de l'arrel | Compte de Riot Games Open Access a grid.gg |
 | Clau de l'API de LoL Esports (només amb `DATA_SOURCE=lolesports`) | Paràmetre `LolEsportsApiKey` (variable `LOLESPORTS_API_KEY`) | Valor de la capçalera `x-api-key` de `esports-api.lolesports.com` |
 
 ## Posada en marxa
@@ -131,15 +131,18 @@ Desplegament amb AWS SAM:
 ```bash
 cd backend
 aws secretsmanager create-secret --name league-of-text/firebase --secret-string file://clau-firebase.json
+aws secretsmanager create-secret --name league-of-text/grid --secret-string "<clau de GRID>"
 sam build
-sam deploy --guided   # demana GridApiKey i FirebaseCredentialsSecretArn (DataSource per defecte: grid)
+sam deploy --guided   # demana GridApiKeySecretArn i FirebaseCredentialsSecretArn (DataSource per defecte: grid)
 ```
 
-La plantilla crea les sis Lambdes (Python 3.12, arm64), la capa amb `firebase-admin` i `requests`, el rol IAM i l'execució periòdica de `GetScheduledMatches`. Les altres regles d'EventBridge les creen i les desactiven les mateixes Lambdes, de manera que només s'executen mentre hi ha partits actius.
+La plantilla crea les sis Lambdes (Python 3.12, x86_64), la capa amb `firebase-admin` i `requests`, el rol IAM i l'execució periòdica de `GetScheduledMatches`. Les altres regles d'EventBridge les creen i les desactiven les mateixes Lambdes, de manera que només s'executen mentre hi ha partits actius.
 
 Variables opcionals: `DATA_SOURCE` (`grid` o `lolesports`, per defecte `grid`), `GRID_TITLE_ID` (si no, es consulta), `LEAGUES` (lligues separades per comes), `SCHEDULE_HORIZON_DAYS` (14), `WATCH_BEFORE_MINUTES` (60).
 
 Per explorar l'API de GRID sense desplegar res: `python backend/scripts/grid_explore.py --help`.
+
+Per importar a Firestore partits que ja s'han jugat (p. ex. el Mundial 2026): `python backend/scripts/import_grid_series.py` (simulació) i després amb `--apply`. Vegeu [`docs/GRID_API.md`](docs/GRID_API.md#importar-partits-ja-jugats).
 
 ## Tecnologies
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +21,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,9 +40,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.leagueoftext.app.R
 import com.leagueoftext.app.appContainer
+import com.leagueoftext.app.data.CalendarMode
+import com.leagueoftext.app.data.Match
 import com.leagueoftext.app.data.MatchState
 import com.leagueoftext.app.ui.Formatters
 import com.leagueoftext.app.ui.LocalRequestNotificationPermission
+import com.leagueoftext.app.ui.components.CollapsibleSectionHeader
 import com.leagueoftext.app.ui.components.EmptyState
 import com.leagueoftext.app.ui.components.LeagueFilterRow
 import com.leagueoftext.app.ui.components.LoadingState
@@ -43,8 +53,15 @@ import com.leagueoftext.app.ui.components.MatchCard
 import com.leagueoftext.app.ui.components.RefreshableContent
 import com.leagueoftext.app.ui.components.RiotTabs
 import com.leagueoftext.app.ui.components.ScreenHeader
-import com.leagueoftext.app.ui.components.SectionHeader
 import com.leagueoftext.app.ui.theme.RiotColors
+import java.time.Instant
+import java.time.LocalDate
+
+/** Desa els dies que l'usuari ha plegat o desplegat (també en girar la pantalla). */
+private val ToggledDaysSaver = listSaver<MutableState<Set<String>>, String>(
+    save = { it.value.toList() },
+    restore = { mutableStateOf(it.toSet()) },
+)
 
 @Composable
 fun EsportsRoute(onOpenMatch: (String) -> Unit) {
@@ -56,7 +73,8 @@ fun EsportsRoute(onOpenMatch: (String) -> Unit) {
     EsportsScreen(
         state = state,
         onSelectTab = viewModel::selectTab,
-        onSelectLeague = viewModel::selectLeague,
+        onToggleLeague = viewModel::toggleLeague,
+        onSelectAllLeagues = viewModel::selectAllLeagues,
         onRefresh = viewModel::refresh,
         onRevealScore = viewModel::revealScore,
         onToggleSubscription = { id ->
@@ -64,6 +82,7 @@ fun EsportsRoute(onOpenMatch: (String) -> Unit) {
             viewModel.toggleSubscription(id)
         },
         onOpenMatch = onOpenMatch,
+        onSelectCalendarMode = viewModel::setCalendarMode,
     )
 }
 
@@ -71,14 +90,38 @@ fun EsportsRoute(onOpenMatch: (String) -> Unit) {
 fun EsportsScreen(
     state: EsportsUiState,
     onSelectTab: (EsportsTab) -> Unit,
-    onSelectLeague: (String?) -> Unit,
+    onToggleLeague: (String) -> Unit,
+    onSelectAllLeagues: () -> Unit,
     onRefresh: () -> Unit,
     onRevealScore: (String) -> Unit,
     onToggleSubscription: (String) -> Unit,
     onOpenMatch: (String) -> Unit,
+    onSelectCalendarMode: (CalendarMode) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(state.tab, state.selectedLeague) { listState.scrollToItem(0) }
+    LaunchedEffect(state.tab, state.selectedLeagues) { listState.scrollToItem(0) }
+
+    // Per defecte només s'obre el dia d'avui (o, si avui no hi ha partits, el primer dia de la llista).
+    // Aquí es desen els dies on l'usuari ha canviat aquest estat per defecte.
+    var toggledDays by rememberSaveable(saver = ToggledDaysSaver) { mutableStateOf(emptySet<String>()) }
+    val today = remember { Formatters.localDate(Instant.now()) }
+
+    // Dia triat al calendari (en dies des de 1970, perquè es pugui desar). `null` = el dia per defecte.
+    var pickedDay by rememberSaveable(state.tab) { mutableStateOf<Long?>(null) }
+
+    val matchItem: @Composable LazyItemScope.(Match) -> Unit = { match ->
+        MatchCard(
+            match = match,
+            subscribed = match.id in state.subscriptions,
+            scoreHidden = state.hideScores && match.id !in state.revealed,
+            onRevealScore = { onRevealScore(match.id) },
+            onToggleSubscription = { onToggleSubscription(match.id) },
+            onClick = if (match.state == MatchState.SCHEDULED) null else ({ onOpenMatch(match.id) }),
+            modifier = Modifier
+                .animateItem()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+    }
 
     RefreshableContent(refreshing = state.refreshing, onRefresh = onRefresh) {
         LazyColumn(
@@ -106,8 +149,9 @@ fun EsportsScreen(
             item(key = "leagues") {
                 LeagueFilterRow(
                     leagues = state.leagues,
-                    selectedKey = state.selectedLeague,
-                    onSelect = onSelectLeague,
+                    selectedKeys = state.selectedLeagues,
+                    onToggle = onToggleLeague,
+                    onSelectAll = onSelectAllLeagues,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                 )
             }
@@ -137,20 +181,35 @@ fun EsportsScreen(
                         }
                     }
                 }
-                else -> state.sections.forEach { section ->
-                    item(key = "day-${state.tab}-${section.date}") {
-                        SectionHeader(Formatters.dayHeader(section.date))
-                    }
-                    items(section.matches, key = { "${state.tab}-${it.id}" }) { match ->
-                        MatchCard(
-                            match = match,
-                            subscribed = match.id in state.subscriptions,
-                            scoreHidden = state.hideScores && match.id !in state.revealed,
-                            onRevealScore = { onRevealScore(match.id) },
-                            onToggleSubscription = { onToggleSubscription(match.id) },
-                            onClick = if (match.state == MatchState.SCHEDULED) null else ({ onOpenMatch(match.id) }),
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        )
+                else -> {
+                    val openByDefault = state.sections.firstOrNull { it.date == today }?.date
+                        ?: state.sections.first().date
+                    if (state.calendarView) calendarItems(
+                        tab = state.tab,
+                        sections = state.sections,
+                        mode = state.calendarMode,
+                        leagueOrder = state.leagues.map { it.key },
+                        singleLeague = state.selectedLeagues.size == 1,
+                        selected = pickedDay?.let(LocalDate::ofEpochDay) ?: openByDefault,
+                        today = today,
+                        onSelectDate = { pickedDay = it.toEpochDay() },
+                        onSelectMode = onSelectCalendarMode,
+                        matchItem = matchItem,
+                    ) else state.sections.forEach { section ->
+                        val dayKey = "${state.tab}-${section.date}"
+                        val expanded = (section.date == openByDefault) != (dayKey in toggledDays)
+                        item(key = "day-$dayKey") {
+                            CollapsibleSectionHeader(
+                                text = Formatters.dayHeader(section.date),
+                                count = section.matches.size,
+                                expanded = expanded,
+                                onToggle = {
+                                    toggledDays = if (dayKey in toggledDays) toggledDays - dayKey else toggledDays + dayKey
+                                },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
+                        if (expanded) items(section.matches, key = { "${state.tab}-${it.id}" }) { match -> matchItem(match) }
                     }
                 }
             }

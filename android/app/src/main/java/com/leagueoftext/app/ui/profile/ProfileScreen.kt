@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -73,6 +74,7 @@ data class ProfileUiState(
     val followingCount: Int = 0,
     val hideScores: Boolean = true,
     val notificationsEnabled: Boolean = true,
+    val calendarView: Boolean = false,
     val busy: Boolean = false,
     val messageRes: Int? = null,
 )
@@ -85,10 +87,15 @@ class ProfileViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<ProfileUiState> = combine(
         container.auth.user,
         container.subscriptions.subscriptions,
-        combine(container.settings.hideScores, container.settings.notificationsEnabled) { a, b -> a to b },
+        combine(
+            container.settings.hideScores,
+            container.settings.notificationsEnabled,
+            container.settings.calendarView,
+            ::Triple,
+        ),
         busy,
         message,
-    ) { user, subs, (hide, notify), isBusy, msg ->
+    ) { user, subs, (hide, notify, calendar), isBusy, msg ->
         ProfileUiState(
             signedIn = user != null,
             name = user?.displayName,
@@ -97,6 +104,7 @@ class ProfileViewModel(private val container: AppContainer) : ViewModel() {
             followingCount = subs.size,
             hideScores = hide,
             notificationsEnabled = notify,
+            calendarView = calendar,
             busy = isBusy,
             messageRes = msg,
         )
@@ -126,6 +134,8 @@ class ProfileViewModel(private val container: AppContainer) : ViewModel() {
     fun setHideScores(value: Boolean) = container.settings.setHideScores(value)
 
     fun setNotificationsEnabled(value: Boolean) = container.settings.setNotificationsEnabled(value)
+
+    fun setCalendarView(value: Boolean) = container.settings.setCalendarView(value)
 }
 
 @Composable
@@ -187,6 +197,13 @@ fun ProfileRoute() {
                 subtitle = pluralStringResource(R.plurals.following_count, state.followingCount, state.followingCount),
                 checked = state.notificationsEnabled,
                 onChange = viewModel::setNotificationsEnabled,
+            )
+            SettingRow(
+                icon = Icons.Filled.CalendarMonth,
+                title = stringResource(R.string.setting_calendar_view),
+                subtitle = stringResource(R.string.setting_calendar_view_desc),
+                checked = state.calendarView,
+                onChange = viewModel::setCalendarView,
             )
             Spacer(Modifier.height(28.dp))
             Text(

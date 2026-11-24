@@ -47,12 +47,25 @@ def data_source() -> str:
     return value
 
 
+@lru_cache(maxsize=1)
 def grid_api_key() -> str:
-    """Clau de l'API de GRID (capçalera ``x-api-key``)."""
-    key = os.environ.get("GRID_API_KEY")
+    """Clau de l'API de GRID (capçalera ``x-api-key``).
+
+    Ordre de cerca:
+      1. ``GRID_API_KEY``: la clau directament (en local, p. ex. des del ``.env``).
+      2. ``GRID_API_KEY_SECRET_ARN``: secret d'AWS Secrets Manager amb la clau (a AWS).
+    """
+    key = (os.environ.get("GRID_API_KEY") or "").strip()
+    secret_arn = (os.environ.get("GRID_API_KEY_SECRET_ARN") or "").strip()
+    if not key and secret_arn:
+        import boto3  # disponible al runtime de Lambda
+
+        key = boto3.client("secretsmanager").get_secret_value(SecretId=secret_arn)["SecretString"].strip()
     if not key:
-        raise RuntimeError("Falta la variable d'entorn GRID_API_KEY (clau de Riot Games Open Access a grid.gg).")
-    return key.strip()
+        raise RuntimeError(
+            "Falta la clau de GRID: defineix GRID_API_KEY (en local) o GRID_API_KEY_SECRET_ARN (a AWS)."
+        )
+    return key
 
 
 def grid_title_id() -> str | None:

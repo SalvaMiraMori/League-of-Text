@@ -1,11 +1,13 @@
 package com.leagueoftext.app.ui.components
 
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,10 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -137,6 +143,60 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier) {
         color = RiotColors.TextSecondary,
         modifier = modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 12.dp),
     )
+}
+
+/**
+ * Capçalera d'un dia que es pot plegar i desplegar amb un toc.
+ * Mostra quants partits té el dia, perquè es vegi encara que estigui plegat.
+ */
+@Composable
+fun CollapsibleSectionHeader(
+    text: String,
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                role = Role.Button,
+                onClickLabel = stringResource(if (expanded) R.string.collapse_day else R.string.expand_day),
+                onClick = onToggle,
+            )
+            .padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            color = RiotColors.TextSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(RiotColors.Chip)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = RiotColors.TextSecondary,
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.ExpandMore,
+            contentDescription = null,
+            tint = RiotColors.TextSecondary,
+            modifier = Modifier
+                .padding(start = 4.dp)
+                .size(28.dp)
+                .rotate(rotation),
+        )
+    }
 }
 
 @Composable

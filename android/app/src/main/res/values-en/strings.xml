@@ -49,7 +49,6 @@
     <string name="stat_dragons">Dragons</string>
     <string name="stat_barons">Barons</string>
     <string name="stat_inhibitors">Inhibitors</string>
-    <string name="event_stats">%1$s %2$d–%3$d %4$s · Gold %5$s–%6$s · Towers %7$d–%8$d · Dragons %9$d–%10$d</string>
     <string name="share_text">%1$s · %2$s (%3$s). Follow it with League of Text!</string>
     <string name="profile_guest">Guest</string>
     <string name="profile_guest_hint">Sign in to save the matches you follow to your account.</string>
@@ -67,5 +66,21 @@
     <plurals name="following_count">
         <item quantity="one">Following %d match</item>
         <item quantity="other">Following %d matches</item>
+    </plurals>
+    <string name="collapse_day">Hide this day\'s matches</string>
+    <string name="expand_day">Show this day\'s matches</string>
+    <string name="setting_calendar_view">Calendar view</string>
+    <string name="setting_calendar_view_desc">Show matches on a calendar instead of a list of days.</string>
+    <string name="calendar_month">Month</string>
+    <string name="calendar_week">Week</string>
+    <string name="calendar_day">Day</string>
+    <string name="calendar_today">Today</string>
+    <string name="calendar_previous">Previous</string>
+    <string name="calendar_next">Next</string>
+    <string name="calendar_no_matches_day">No matches on this day.</string>
+    <string name="calendar_no_matches_week">No matches this week.</string>
+    <plurals name="calendar_matches">
+        <item quantity="one">%d match</item>
+        <item quantity="other">%d matches</item>
     </plurals>
 </resources>

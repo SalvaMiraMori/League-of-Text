@@ -270,6 +270,20 @@ def series_to_event(series: dict, state: str, leagues: tuple[str, ...] | None = 
     }
 
 
+def iter_series(start: datetime, end: datetime) -> Iterator[dict]:
+    """Sèries de LoL de Central Data (en brut) programades entre ``start`` i ``end``."""
+    variables = {"titleId": lol_title_id(), "from": format_timestamp(start), "to": format_timestamp(end)}
+    after = None
+    for _ in range(MAX_PAGES):
+        data = graphql(CENTRAL_DATA_URL, ALL_SERIES_QUERY, {**variables, "after": after})["allSeries"]
+        for edge in data["edges"]:
+            yield edge["node"]
+        if not data["pageInfo"]["hasNextPage"]:
+            return
+        after = data["pageInfo"]["endCursor"]
+    log.warning("S'ha arribat al límit de %d pàgines del calendari de GRID", MAX_PAGES)
+
+
 def iter_schedule_events(direction: str = "newer", now: datetime | None = None) -> Iterator[dict]:
     """Sèries de LoL des de fa un dia fins a l'horitzó de ``config.schedule_horizon_days()``.
 
@@ -277,22 +291,10 @@ def iter_schedule_events(direction: str = "newer", now: datetime | None = None) 
     Les que encara no han arribat a l'hora d'inici surten com a ``unstarted``.
     """
     now = now or datetime.now(timezone.utc)
-    variables = {
-        "titleId": lol_title_id(),
-        "from": format_timestamp(now - timedelta(days=1)),
-        "to": format_timestamp(now + timedelta(days=config.schedule_horizon_days())),
-    }
-    after = None
-    for _ in range(MAX_PAGES):
-        data = graphql(CENTRAL_DATA_URL, ALL_SERIES_QUERY, {**variables, "after": after})["allSeries"]
-        for edge in data["edges"]:
-            series = edge["node"]
-            started = parse_timestamp(series["startTimeScheduled"]) <= now
-            yield series_to_event(series, "inProgress" if started else "unstarted")
-        if not data["pageInfo"]["hasNextPage"]:
-            return
-        after = data["pageInfo"]["endCursor"]
-    log.warning("S'ha arribat al límit de %d pàgines del calendari de GRID", MAX_PAGES)
+    end = now + timedelta(days=config.schedule_horizon_days())
+    for series in iter_series(now - timedelta(days=1), end):
+        started = parse_timestamp(series["startTimeScheduled"]) <= now
+        yield series_to_event(series, "inProgress" if started else "unstarted")
 
 
 # --------------------------------------------------------------------------- estat de la sèrie

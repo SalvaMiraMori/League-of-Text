@@ -8,11 +8,10 @@ Parameters:
     Default: grid
     AllowedValues: [grid, lolesports]
     Description: Font de dades dels partits (grid = API oficial de GRID, lolesports = API no oficial)
-  GridApiKey:
+  GridApiKeySecretArn:
     Type: String
-    NoEcho: true
     Default: ""
-    Description: Clau de l'API de GRID (Riot Games Open Access). Obligatòria si DataSource = grid
+    Description: ARN del secret de Secrets Manager amb la clau de l'API de GRID (Riot Games Open Access). Obligatori si DataSource = grid
   GridTitleId:
     Type: String
     Default: ""
@@ -30,10 +29,13 @@ Parameters:
     Default: "LCK,LEC,LCS,Worlds,MSI,First Stand"
     Description: Lligues que se segueixen (nom exacte de l'API, separades per comes)
 
+Conditions:
+  HasGridSecret: !Not [!Equals [!Ref GridApiKeySecretArn, ""]]
+
 Globals:
   Function:
     Runtime: python3.12
-    Architectures: [arm64]
+    Architectures: [x86_64]
     CodeUri: src/
     MemorySize: 256
     Timeout: 50
@@ -41,7 +43,7 @@ Globals:
     Environment:
       Variables:
         DATA_SOURCE: !Ref DataSource
-        GRID_API_KEY: !Ref GridApiKey
+        GRID_API_KEY_SECRET_ARN: !Ref GridApiKeySecretArn
         GRID_TITLE_ID: !Ref GridTitleId
         LOLESPORTS_API_KEY: !Ref LolEsportsApiKey
         FIREBASE_CREDENTIALS_SECRET_ARN: !Ref FirebaseCredentialsSecretArn
@@ -54,10 +56,10 @@ Resources:
       LayerName: league-of-text-dependencies
       ContentUri: layer/
       CompatibleRuntimes: [python3.12]
-      CompatibleArchitectures: [arm64]
+      CompatibleArchitectures: [x86_64]
     Metadata:
       BuildMethod: python3.12
-      BuildArchitecture: arm64
+      BuildArchitecture: x86_64
 
   # Permisos comuns: llegir el secret i gestionar les regles d'EventBridge i les invocacions.
   BackendRole:
@@ -78,7 +80,9 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
-                Resource: !Ref FirebaseCredentialsSecretArn
+                Resource:
+                  - !Ref FirebaseCredentialsSecretArn
+                  - !If [HasGridSecret, !Ref GridApiKeySecretArn, !Ref AWS::NoValue]
               - Effect: Allow
                 Action:
                   - events:PutRule

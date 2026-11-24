@@ -5,6 +5,9 @@ import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
+/** Vista del calendari de partits (quan està activat a la configuració). */
+enum class CalendarMode { MONTH, WEEK, DAY }
+
 /**
  * Preferències de l'usuari, desades al dispositiu.
  *
@@ -21,6 +24,16 @@ class SettingsRepository(private val prefs: SharedPreferences) {
     val notificationsEnabled: StateFlow<Boolean>
         field = MutableStateFlow(prefs.getBoolean(KEY_NOTIFICATIONS, true))
 
+    /** Si està activat, la pantalla d'Esports mostra un calendari en lloc de la llista de dies. */
+    val calendarView: StateFlow<Boolean>
+        field = MutableStateFlow(prefs.getBoolean(KEY_CALENDAR_VIEW, false))
+
+    /** Última vista del calendari que ha triat l'usuari (mensual, setmanal o diària). */
+    val calendarMode: StateFlow<CalendarMode>
+        field = MutableStateFlow(
+            CalendarMode.entries.firstOrNull { it.name == prefs.getString(KEY_CALENDAR_MODE, null) } ?: CalendarMode.MONTH,
+        )
+
     fun setHideScores(value: Boolean) {
         prefs.edit { putBoolean(KEY_HIDE_SCORES, value) }
         hideScores.value = value
@@ -31,8 +44,20 @@ class SettingsRepository(private val prefs: SharedPreferences) {
         notificationsEnabled.value = value
     }
 
+    fun setCalendarView(value: Boolean) {
+        prefs.edit { putBoolean(KEY_CALENDAR_VIEW, value) }
+        calendarView.value = value
+    }
+
+    fun setCalendarMode(value: CalendarMode) {
+        prefs.edit { putString(KEY_CALENDAR_MODE, value.name) }
+        calendarMode.value = value
+    }
+
     private companion object {
         const val KEY_HIDE_SCORES = "hide_scores"
         const val KEY_NOTIFICATIONS = "notifications_enabled"
+        const val KEY_CALENDAR_VIEW = "calendar_view"
+        const val KEY_CALENDAR_MODE = "calendar_mode"
     }
 }

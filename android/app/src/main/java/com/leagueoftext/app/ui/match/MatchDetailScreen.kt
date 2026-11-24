@@ -64,6 +64,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -401,16 +402,25 @@ private fun Scoreboard(game: Game, fallbackStats: GameStats?) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        // L'or va primer, amb la barra just a sota: la part blava/vermella és la proporció d'or de cada equip.
-        StatRow(Icons.Filled.Stars, stringResource(R.string.stat_gold), stats.blue.goldLabel, stats.red.goldLabel)
-        GoldBar(stats.blue.gold, stats.red.gold)
-        Spacer(Modifier.height(8.dp))
-        StatRow(Icons.Filled.GpsFixed, stringResource(R.string.stat_kills), stats.blue.kills.toString(), stats.red.kills.toString())
-        StatRow(Icons.Filled.Castle, stringResource(R.string.stat_towers), stats.blue.towers.toString(), stats.red.towers.toString())
-        StatRow(Icons.Filled.Whatshot, stringResource(R.string.stat_dragons), stats.blue.dragons.toString(), stats.red.dragons.toString())
-        StatRow(Icons.Filled.AutoAwesome, stringResource(R.string.stat_barons), stats.blue.barons.toString(), stats.red.barons.toString())
-        StatRow(Icons.Filled.Shield, stringResource(R.string.stat_inhibitors), stats.blue.inhibitors.toString(), stats.red.inhibitors.toString())
+        StatsBlock(stats, horizontalPadding = 20.dp)
     }
+}
+
+/**
+ * Bloc d'estadístiques blau contra vermell, compartit pel resum final i per les notificacions de la cronologia.
+ * L'or va primer, amb la barra just a sota: la part blava/vermella és la proporció d'or de cada equip.
+ */
+@Composable
+private fun StatsBlock(stats: GameStats, horizontalPadding: Dp, compact: Boolean = false) {
+    val rowPadding = if (compact) 4.dp else 7.dp
+    StatRow(Icons.Filled.Stars, stringResource(R.string.stat_gold), stats.blue.goldLabel, stats.red.goldLabel, horizontalPadding, rowPadding, compact)
+    GoldBar(stats.blue.gold, stats.red.gold, horizontalPadding)
+    Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
+    StatRow(Icons.Filled.GpsFixed, stringResource(R.string.stat_kills), stats.blue.kills.toString(), stats.red.kills.toString(), horizontalPadding, rowPadding, compact)
+    StatRow(Icons.Filled.Castle, stringResource(R.string.stat_towers), stats.blue.towers.toString(), stats.red.towers.toString(), horizontalPadding, rowPadding, compact)
+    StatRow(Icons.Filled.Whatshot, stringResource(R.string.stat_dragons), stats.blue.dragons.toString(), stats.red.dragons.toString(), horizontalPadding, rowPadding, compact)
+    StatRow(Icons.Filled.AutoAwesome, stringResource(R.string.stat_barons), stats.blue.barons.toString(), stats.red.barons.toString(), horizontalPadding, rowPadding, compact)
+    StatRow(Icons.Filled.Shield, stringResource(R.string.stat_inhibitors), stats.blue.inhibitors.toString(), stats.red.inhibitors.toString(), horizontalPadding, rowPadding, compact)
 }
 
 /**
@@ -429,11 +439,11 @@ internal fun blueGoldFraction(blue: Int, red: Int): Float {
 }
 
 @Composable
-private fun GoldBar(blue: Int, red: Int) {
+private fun GoldBar(blue: Int, red: Int, horizontalPadding: Dp) {
     val blueFraction = blueGoldFraction(blue, red)
     Row(
         Modifier
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = horizontalPadding)
             .fillMaxWidth()
             .height(6.dp)
             .clip(RoundedCornerShape(3.dp)),
@@ -445,16 +455,26 @@ private fun GoldBar(blue: Int, red: Int) {
 }
 
 @Composable
-private fun StatRow(icon: ImageVector, label: String, blue: String, red: String) {
+private fun StatRow(
+    icon: ImageVector,
+    label: String,
+    blue: String,
+    red: String,
+    horizontalPadding: Dp,
+    verticalPadding: Dp,
+    compact: Boolean,
+) {
+    val valueStyle = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium
+    val labelStyle = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 7.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(blue, style = MaterialTheme.typography.titleMedium, color = RiotColors.TextPrimary, modifier = Modifier.weight(1f))
-        Icon(icon, contentDescription = null, tint = RiotColors.TextTertiary, modifier = Modifier.size(16.dp))
+        Text(blue, style = valueStyle, color = RiotColors.TextPrimary, modifier = Modifier.weight(1f))
+        Icon(icon, contentDescription = null, tint = RiotColors.TextTertiary, modifier = Modifier.size(if (compact) 14.dp else 16.dp))
         Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = RiotColors.TextSecondary)
-        Text(red, style = MaterialTheme.typography.titleMedium, color = RiotColors.TextPrimary, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+        Text(label, style = labelStyle, color = RiotColors.TextSecondary)
+        Text(red, style = valueStyle, color = RiotColors.TextPrimary, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
     }
 }
 
@@ -500,23 +520,49 @@ private fun EventRow(event: GameEvent) {
                 )
             }
             AnimatedVisibility(visible = expanded && event.stats != null) {
-                event.stats?.let { stats ->
-                    Text(
-                        text = stringResource(
-                            R.string.event_stats,
-                            event.blueTeam, stats.blue.kills, stats.red.kills, event.redTeam,
-                            stats.blue.goldLabel, stats.red.goldLabel,
-                            stats.blue.towers, stats.red.towers,
-                            stats.blue.dragons, stats.red.dragons,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = RiotColors.TextSecondary,
-                        modifier = Modifier.padding(start = 94.dp, top = 6.dp),
-                    )
-                }
+                event.stats?.let { stats -> EventStatsCard(event, stats) }
             }
         }
         HorizontalDivider(color = RiotColors.Divider.copy(alpha = 0.6f), modifier = Modifier.padding(start = 94.dp))
+    }
+}
+
+/** Estadístiques del moment de la notificació, amb el mateix format que el resum final però més compacte. */
+@Composable
+private fun EventStatsCard(event: GameEvent, stats: GameStats) {
+    Column(
+        modifier = Modifier
+            .padding(start = 74.dp, top = 10.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(RiotColors.Surface)
+            .padding(vertical = 10.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                event.blueTeam.ifBlank { "BLUE" },
+                color = RiotColors.BlueSide,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                event.playingTime,
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = RiotColors.TextSecondary,
+            )
+            Text(
+                event.redTeam.ifBlank { "RED" },
+                color = RiotColors.RedSide,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 14.sp,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        StatsBlock(stats, horizontalPadding = 14.dp, compact = true)
     }
 }
 

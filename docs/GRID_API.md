@@ -34,7 +34,7 @@ Si es supera, l'API respon que cal esperar. `grid_explore.py` ja espaia les peti
 Igual que la resta de credencials del projecte, **mai al repositori ni a l'app Android**:
 
 - En local: fitxer `.env` a l'arrel del repositori (ja és al `.gitignore`) amb `GRID_API_KEY=...`, o variable d'entorn `GRID_API_KEY`.
-- A AWS: paràmetre `GridApiKey` de la plantilla SAM (arriba a les Lambdes com a `GRID_API_KEY`).
+- A AWS: secret de Secrets Manager (paràmetre `GridApiKeySecretArn` de la plantilla SAM), com la clau de Firebase. No es fa servir un paràmetre `NoEcho`: SAM no el desa a `samconfig.toml` i es perdria al desplegament següent.
 
 L'app no ha de parlar mai directament amb GRID: llegeix de Firestore, com ara.
 
@@ -399,6 +399,24 @@ python scripts/grid_explore.py detail <id de la final> --out worlds_final.json
 Comprovat el 20/11/2026: `series` retorna les 46 sèries de Worlds, Series State funciona per a LoL amb la clau d'Open Access i tots els camps de les consultes existeixen. Els únics que surten buits són `streams` i `players[].roles`.
 
 Les respostes JSON (`worlds_series.json`, `worlds_final.json`) són dades de GRID: millor no pujar-les al repositori.
+
+## Importar partits ja jugats
+
+`backend/scripts/import_grid_series.py` llegeix l'estat final de cada sèrie i la desa a Firestore amb el mateix format que el backend en directe (`Matches`, `Games` i notificacions), sense enviar cap notificació push. Els partits surten a «Resultats» i al detall de l'app.
+
+```powershell
+cd backend
+pip install -r requirements.txt
+$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\Users\salva\claus\firebase.json"
+python scripts/import_grid_series.py            # simulació: mostra què importaria
+python scripts/import_grid_series.py --apply    # escriu a Firestore
+```
+
+- Per defecte importa el torneig «Worlds - 2026» (`--tournament`, `--from`, `--to` per a uns altres; `--series <id>` per a sèries concretes).
+- La clau de GRID es llegeix del `.env`. Es pot tornar a executar: els documents tenen els mateixos ids (`3012986`, `3012986-1`…).
+- **Cronologia:** GRID només dona l'estat final, de manera que cada joc té l'inici i el final (amb la durada real) i les estadístiques finals (kills, or, torres, dracs, barons, inhibidors). No es reconstrueixen les kills ni els objectius un per un, perquè no se sap quan van passar.
+- **Duplicats:** si a Firestore ja hi ha el mateix enfrontament amb un altre id (p. ex. desat per l'API de LoL Esports), l'script l'avisa. Amb `--delete-duplicates` esborra l'antic.
+- Lògica a `backend/src/leagueoftext/backfill.py` (tests a `tests/test_backfill.py`).
 
 ## Integració al backend
 

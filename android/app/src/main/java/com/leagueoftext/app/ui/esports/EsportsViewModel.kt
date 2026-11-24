@@ -3,6 +3,7 @@ package com.leagueoftext.app.ui.esports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leagueoftext.app.AppContainer
+import com.leagueoftext.app.data.CalendarMode
 import com.leagueoftext.app.data.Feed
 import com.leagueoftext.app.data.League
 import com.leagueoftext.app.data.Leagues
@@ -26,7 +27,8 @@ data class DaySection(val date: LocalDate, val matches: List<Match>)
 data class EsportsUiState(
     val tab: EsportsTab = EsportsTab.UPCOMING,
     val leagues: List<League> = emptyList(),
-    val selectedLeague: String? = null,
+    /** Competicions triades al filtre. Buit = totes. */
+    val selectedLeagues: Set<String> = emptySet(),
     val sections: List<DaySection> = emptyList(),
     val liveCount: Int = 0,
     val loading: Boolean = true,
@@ -35,13 +37,17 @@ data class EsportsUiState(
     val hideScores: Boolean = true,
     val revealed: Set<String> = emptySet(),
     val refreshing: Boolean = false,
+    val calendarView: Boolean = false,
+    val calendarMode: CalendarMode = CalendarMode.MONTH,
 )
 
 private data class Filters(
-    val selectedLeague: String?,
+    val selectedLeagues: Set<String>,
     val subscriptions: Set<String>,
     val hideScores: Boolean,
     val revealed: Set<String>,
+    val calendarView: Boolean,
+    val calendarMode: CalendarMode,
 )
 
 class EsportsViewModel(private val container: AppContainer) : ViewModel() {
@@ -50,7 +56,7 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
 
     /** `null` = encara no triada: s'obre "En directe" si n'hi ha cap, si no "Pròximament". */
     private val selectedTab = MutableStateFlow<EsportsTab?>(null)
-    private val selectedLeague = MutableStateFlow<String?>(null)
+    private val selectedLeagues = MutableStateFlow<Set<String>>(emptySet())
     private val revealed = MutableStateFlow<Set<String>>(emptySet())
     private val manualRefresh = ManualRefresh(this)
 
@@ -71,11 +77,12 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private val filters = combine(
-        selectedLeague,
+        selectedLeagues,
         container.subscriptions.subscriptions,
         container.settings.hideScores,
         revealed,
-    ) { league, subs, hide, shown -> Filters(league, subs, hide, shown) }
+        combine(container.settings.calendarView, container.settings.calendarMode, ::Pair),
+    ) { league, subs, hide, shown, (calendar, mode) -> Filters(league, subs, hide, shown, calendar, mode) }
 
     val uiState: StateFlow<EsportsUiState> =
         combine(tabFeed, repository.live, filters, manualRefresh.refreshing) { (currentTab, feed), live, f, refreshing ->
@@ -89,13 +96,21 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
     /** Estirar la llista cap avall des de dalt. */
     fun refresh() = manualRefresh.launch { repository.refreshLists() }
 
-    fun selectLeague(key: String?) {
-        selectedLeague.value = key
+    /** Afegeix o treu una competició del filtre (se'n poden triar diverses). */
+    fun toggleLeague(key: String) {
+        selectedLeagues.update { if (key in it) it - key else it + key }
+    }
+
+    /** Treu el filtre: es mostren totes les competicions. */
+    fun selectAllLeagues() {
+        selectedLeagues.value = emptySet()
     }
 
     fun revealScore(matchId: String) {
         revealed.update { it + matchId }
     }
+
+    fun setCalendarMode(mode: CalendarMode) = container.settings.setCalendarMode(mode)
 
     fun toggleSubscription(matchId: String) {
         container.subscriptions.toggle(matchId)
@@ -123,9 +138,9 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
     ): EsportsUiState {
         rememberLeagues(feed.data + live.data)
         val leagues = Leagues.merge(seenLeagues.value.values)
-        val league = f.selectedLeague?.takeIf { key -> leagues.any { it.key == key } }
-        val visible = if (league == null) feed.data else feed.data.filter { match ->
-            match.league?.let(Leagues::canonicalKey) == league
+        val chosen = f.selectedLeagues.filterTo(mutableSetOf()) { key -> leagues.any { it.key == key } }
+        val visible = if (chosen.isEmpty()) feed.data else feed.data.filter { match ->
+            match.league?.let(Leagues::canonicalKey) in chosen
         }
         val sections = visible
             .groupBy { Formatters.localDate(it.startTime) }
@@ -133,7 +148,7 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
         return EsportsUiState(
             tab = tab,
             leagues = leagues,
-            selectedLeague = league,
+            selectedLeagues = chosen,
             sections = sections,
             liveCount = live.data.size,
             loading = feed.loading,
@@ -141,6 +156,8 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
             subscriptions = f.subscriptions,
             hideScores = f.hideScores,
             revealed = f.revealed,
+            calendarView = f.calendarView,
+            calendarMode = f.calendarMode,
         )
     }
 }

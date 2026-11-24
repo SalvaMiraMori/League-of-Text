@@ -53,7 +53,6 @@
     <string name="stat_dragons">Dracs</string>
     <string name="stat_barons">Barons</string>
     <string name="stat_inhibitors">Inhibidors</string>
-    <string name="event_stats">%1$s %2$d–%3$d %4$s · Or %5$s–%6$s · Torres %7$d–%8$d · Dracs %9$d–%10$d</string>
     <string name="share_text">%1$s · %2$s (%3$s). Segueix-lo amb League of Text!</string>
     <string name="profile_guest">Convidat</string>
     <string name="profile_guest_hint">Inicia la sessió per guardar els partits que segueixes al teu compte.</string>
@@ -71,5 +70,21 @@
     <plurals name="following_count">
         <item quantity="one">Segueixes %d partit</item>
         <item quantity="other">Segueixes %d partits</item>
+    </plurals>
+    <string name="collapse_day">Amaga els partits d\'aquest dia</string>
+    <string name="expand_day">Mostra els partits d\'aquest dia</string>
+    <string name="setting_calendar_view">Vista de calendari</string>
+    <string name="setting_calendar_view_desc">Mostra els partits en un calendari en lloc d\'una llista de dies.</string>
+    <string name="calendar_month">Mes</string>
+    <string name="calendar_week">Setmana</string>
+    <string name="calendar_day">Dia</string>
+    <string name="calendar_today">Avui</string>
+    <string name="calendar_previous">Anterior</string>
+    <string name="calendar_next">Següent</string>
+    <string name="calendar_no_matches_day">No hi ha partits aquest dia.</string>
+    <string name="calendar_no_matches_week">No hi ha partits aquesta setmana.</string>
+    <plurals name="calendar_matches">
+        <item quantity="one">%d partit</item>
+        <item quantity="other">%d partits</item>
     </plurals>
 </resources>

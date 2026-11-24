@@ -227,7 +227,7 @@ def test_graphql_errors_are_raised(monkeypatch):
         def post(self, *args, **kwargs):
             return Response()
 
-    monkeypatch.setenv("GRID_API_KEY", "test")
+    monkeypatch.setattr(grid.config, "grid_api_key", lambda: "test")
     monkeypatch.setattr(grid, "_get_session", lambda: Session())
     with pytest.raises(grid.GridError, match="PERMISSION_DENIED"):
         grid.graphql(grid.SERIES_STATE_URL, "query { x }")
@@ -237,8 +237,35 @@ def test_missing_grid_key(monkeypatch):
     from leagueoftext import config
 
     monkeypatch.delenv("GRID_API_KEY", raising=False)
+    monkeypatch.delenv("GRID_API_KEY_SECRET_ARN", raising=False)
+    config.grid_api_key.cache_clear()
     with pytest.raises(RuntimeError):
         config.grid_api_key()
+
+
+def test_grid_key_from_secrets_manager(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    from leagueoftext import config
+
+    calls = []
+
+    class Client:
+        def get_secret_value(self, SecretId):
+            calls.append(SecretId)
+            return {"SecretString": " clau-secreta\n"}
+
+    monkeypatch.setitem(sys.modules, "boto3", SimpleNamespace(client=lambda service: Client()))
+    monkeypatch.delenv("GRID_API_KEY", raising=False)
+    monkeypatch.setenv("GRID_API_KEY_SECRET_ARN", "arn:aws:secretsmanager:eu:1:secret:grid")
+    config.grid_api_key.cache_clear()
+    try:
+        assert config.grid_api_key() == "clau-secreta"
+        assert config.grid_api_key() == "clau-secreta"
+        assert calls == ["arn:aws:secretsmanager:eu:1:secret:grid"]  # es llegeix una sola vegada
+    finally:
+        config.grid_api_key.cache_clear()
 
 
 def test_invalid_data_source(monkeypatch):

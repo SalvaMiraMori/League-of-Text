@@ -100,12 +100,16 @@ fun RiotTabs(
     }
 }
 
-/** Fila de lligues (com la de Riot Mobile): "Totes" + una casella per lliga. */
+/**
+ * Fila de lligues (com la de Riot Mobile): "Totes" + una casella per lliga.
+ * Se'n poden marcar diverses alhora; "Totes" treu el filtre.
+ */
 @Composable
 fun LeagueFilterRow(
     leagues: List<League>,
-    selectedKey: String?,
-    onSelect: (String?) -> Unit,
+    selectedKeys: Set<String>,
+    onToggle: (String) -> Unit,
+    onSelectAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyRow(
@@ -116,8 +120,8 @@ fun LeagueFilterRow(
         item(key = "all") {
             LeagueTile(
                 label = stringResource(R.string.league_all),
-                selected = selectedKey == null,
-                onClick = { onSelect(null) },
+                selected = selectedKeys.isEmpty(),
+                onClick = onSelectAll,
             ) {
                 Icon(
                     Icons.Filled.SportsEsports,
@@ -130,8 +134,8 @@ fun LeagueFilterRow(
         items(leagues, key = { it.key }) { league ->
             LeagueTile(
                 label = league.name,
-                selected = selectedKey == league.key,
-                onClick = { onSelect(league.key) },
+                selected = league.key in selectedKeys,
+                onClick = { onToggle(league.key) },
             ) {
                 RemoteLogo(url = league.image, fallbackText = league.name, size = 34.dp, contentDescription = league.name)
             }

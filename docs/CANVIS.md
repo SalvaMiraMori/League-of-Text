@@ -78,7 +78,9 @@ Funcions noves: pestanya «Seguint», seguir partits sense iniciar sessió, obri
 - Com que GRID no dona els ids dels jocs abans que comencin, es fan servir ids sintètics `<sèrie>-<número>` (p. ex. `3012986-2`).
 - `UpdateGameState` amb GRID llegeix l'estat 4 vegades per execució, cada 10 s (el límit d'Open Access és 6 per minut i sèrie), i ja no ha d'estimar el guanyador: GRID l'indica.
 - `Game`: si el fotograma porta el rellotge de joc (`clockSeconds`) es fa servir en lloc de calcular-lo amb les marques de temps, i si porta els comptadors de multikills de GRID es fan servir en lloc de la finestra de 10 s.
-- Plantilla SAM: paràmetres nous `DataSource`, `GridApiKey` i `GridTitleId`; `LolEsportsApiKey` passa a ser opcional.
+- Plantilla SAM: paràmetres nous `DataSource`, `GridApiKeySecretArn` i `GridTitleId`; `LolEsportsApiKey` passa a ser opcional. La clau de GRID es guarda a Secrets Manager (un paràmetre `NoEcho` no es desa a `samconfig.toml` i quedava buit en tornar a desplegar).
+- Lambdes i capa a **x86_64** en lloc d'arm64: `sam build --use-container` en un PC x86 havia d'emular arm64 (lent i amb risc d'errors en compilar `grpcio`). Costa un ~20% més, però amb aquest volum continua dins de la capa gratuïta.
 - Inici tardà: si `GameIsLive` troba el joc ja començat, `Game.start` anuncia el que s'havia perdut (kills totals per jugador; primera sang i primera torre només si la font diu qui les va fer). Si són més de 5 esdeveniments, l'avís d'inici diu que el joc ja està en marxa en lloc d'enviar-los un per un.
+- `backend/scripts/import_grid_series.py` (lògica a `backfill.py`): importa a Firestore partits ja jugats a partir de l'estat final de GRID, amb detecció de duplicats. Serveix per carregar el Mundial 2026.
 - `backend/scripts/grid_explore.py` per provar les consultes i desar les respostes en JSON. Documentació a `docs/GRID_API.md`.
 - Tests nous (`tests/test_grid.py` i el flux complet amb GRID a `tests/test_handlers_flow.py`).
