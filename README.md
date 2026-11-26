@@ -47,7 +47,7 @@ La interfície s'inspira en l'app **Riot Mobile**: fons fosc, títols grans, fil
 - **Dades de demostració:** amb `leagueoftext.mockData=true` a `android/gradle.properties` (només en compilacions de debug), Pròxims i En directe mostren partits inventats amb hores relatives al moment d'obrir l'app. Les partides en directe avancen soles: el rellotge corre i hi apareixen esdeveniments nous. Resultats continua llegint Firestore. Vegeu `data/MockMatchRepository.kt`.
 - **Fila de lligues fixa:** LCK, LEC, LCS, Mundial, MSI i First Stand surten sempre, encara que la pestanya no en tingui partits, i conserven el logotip un cop vist.
 - **Migració del model antic** (`backend/scripts/migrate_legacy_collections.py`): reconstrueix el marcador i el guanyador dels partits acabats (el backend antic no desava l'última victòria), descarta els partits obsolets, estalvia quota de Firestore i es pot reprendre. L'opció `--scores-only` corregeix només els marcadors de partits ja migrats.
-- **Compilació actualitzada:** Kotlin 2.4.21, AGP 9.5.3 i Gradle 9.6, amb el dimoni de Gradle sobre JDK 25.
+- **Compilació actualitzada:** Kotlin 2.4.21, AGP 9.5.3 i Gradle 9.9.2, amb el dimoni de Gradle sobre JDK 25.
 - **Dades oficials de GRID:** el backend llegeix els partits de l'API oficial de GRID (Riot Games Open Access) per defecte, amb l'API de LoL Esports com a alternativa (`DATA_SOURCE`). Vegeu [`docs/GRID_API.md`](docs/GRID_API.md).
 
 **Pendent**
@@ -179,7 +179,7 @@ Per importar a Firestore partits que ja s'han jugat (p. ex. el Mundial 2026): `p
 ## Tecnologies
 
 - **App:** Kotlin 2.4.21, Jetpack Compose (BOM 2026.09.00, Compose 1.12, Material 3), Navigation Compose, ViewModel + StateFlow, Coil, Firebase Auth (Google amb Credential Manager), Firestore (memòria cau persistent) i Cloud Messaging. Interfície 100% Compose, sense layouts XML. `minSdk` 24, `compileSdk`/`targetSdk` 37. Idiomes: català, castellà i anglès.
-- **Compilació:** Gradle 9.6 (dimoni sobre JDK 25), Android Gradle Plugin 9.5.3 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
+- **Compilació:** Gradle 9.9.2 (dimoni sobre JDK 25), Android Gradle Plugin 9.5.3 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
 - **Backend:** Python 3.12, `requests`, `firebase-admin`, `boto3`, AWS Lambda, Amazon EventBridge, AWS SAM. Dades: API GraphQL de GRID (Open Access) o API de LoL Esports.
 
 ## Limitacions conegudes
