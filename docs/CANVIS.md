@@ -84,3 +84,11 @@ Funcions noves: pestanya «Seguint», seguir partits sense iniciar sessió, obri
 - `backend/scripts/import_grid_series.py` (lògica a `backfill.py`): importa a Firestore partits ja jugats a partir de l'estat final de GRID, amb detecció de duplicats. Serveix per carregar el Mundial 2026.
 - `backend/scripts/grid_explore.py` per provar les consultes i desar les respostes en JSON. Documentació a `docs/GRID_API.md`.
 - Tests nous (`tests/test_grid.py` i el flux complet amb GRID a `tests/test_handlers_flow.py`).
+
+### App
+
+- Vista de calendari opcional (mensual, setmanal o diària) a Pròxims i Resultats, que s'activa al Perfil.
+- Filtre per una o diverses lligues alhora.
+- Pestanya inicial segons el contingut (En directe > Pròxims > Resultats); mentre no se'n tria cap, s'escolten les tres llistes i després només la visible. A En directe es mostren només les targetes, sense calendari.
+- Dades de demostració (`leagueoftext.mockData`, només debug): la interfície `MatchSource` separa les pantalles de l'origen de les dades, i `MockMatchRepository` genera partits programats i en directe que avancen en temps real. Resultats i els partits que no són de demostració es continuen llegint de Firestore, d'on també s'agafen els logotips.
+- `versionName` 2.2.0 (`versionCode` 4).

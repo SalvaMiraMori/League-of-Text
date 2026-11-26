@@ -184,7 +184,13 @@ fun EsportsScreen(
                 else -> {
                     val openByDefault = state.sections.firstOrNull { it.date == today }?.date
                         ?: state.sections.first().date
-                    if (state.calendarView) calendarItems(
+                    // A "En directe" tots els partits són d'avui: ni calendari ni dies plegables,
+                    // només les targetes dels partits.
+                    if (state.tab == EsportsTab.LIVE) {
+                        items(state.sections.flatMap { it.matches }, key = { "${state.tab}-${it.id}" }) { match ->
+                            matchItem(match)
+                        }
+                    } else if (state.calendarView) calendarItems(
                         tab = state.tab,
                         sections = state.sections,
                         mode = state.calendarMode,

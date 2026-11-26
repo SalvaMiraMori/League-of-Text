@@ -42,3 +42,6 @@ Thumbs.db
 
 # ---- Material de referència (captures de Riot Mobile) ----
 Graphics sources/
+
+# Gravacions originals de pantalla (massa grans per a GitHub; al repo hi ha docs/img/demo.mp4)
+docs/img/*.webm

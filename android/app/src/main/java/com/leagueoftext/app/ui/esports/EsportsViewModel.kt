@@ -14,7 +14,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -54,7 +56,7 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
 
     private val repository = container.matches
 
-    /** `null` = encara no triada: s'obre "En directe" si n'hi ha cap, si no "Pròximament". */
+    /** `null` = encara no triada: s'obre la primera que tingui partits segons [defaultTab]. */
     private val selectedTab = MutableStateFlow<EsportsTab?>(null)
     private val selectedLeagues = MutableStateFlow<Set<String>>(emptySet())
     private val revealed = MutableStateFlow<Set<String>>(emptySet())
@@ -63,9 +65,11 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
     /** Totes les lligues vistes en qualsevol pestanya, per conservar-ne el logotip. */
     private val seenLeagues = MutableStateFlow<Map<String, League>>(emptyMap())
 
-    private val tab = combine(selectedTab, repository.live) { chosen, live ->
-        chosen ?: if (live.data.isNotEmpty()) EsportsTab.LIVE else EsportsTab.UPCOMING
-    }
+    // Les tres llistes només s'escolten mentre l'usuari no ha triat cap pestanya.
+    private val tab = selectedTab.flatMapLatest { chosen ->
+        if (chosen != null) flowOf(chosen)
+        else combine(repository.live, repository.scheduled, repository.completed, ::defaultTab)
+    }.distinctUntilChanged()
 
     // Només s'escolta la llista de la pestanya visible (i la de directe, per al punt vermell).
     private val tabFeed = tab.flatMapLatest { current ->
@@ -114,6 +118,22 @@ class EsportsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun toggleSubscription(matchId: String) {
         container.subscriptions.toggle(matchId)
+    }
+
+    /**
+     * Pestanya per defecte, per ordre de prioritat: En directe > Pròximament > Resultats.
+     * Mentre els pròxims partits encara es carreguen es queda a Pròximament, perquè no salti
+     * a Resultats i en torni.
+     */
+    private fun defaultTab(
+        live: Feed<List<Match>>,
+        scheduled: Feed<List<Match>>,
+        completed: Feed<List<Match>>,
+    ): EsportsTab = when {
+        live.data.isNotEmpty() -> EsportsTab.LIVE
+        scheduled.data.isNotEmpty() || scheduled.loading -> EsportsTab.UPCOMING
+        completed.data.isNotEmpty() -> EsportsTab.RESULTS
+        else -> EsportsTab.UPCOMING
     }
 
     private fun rememberLeagues(matches: List<Match>) {

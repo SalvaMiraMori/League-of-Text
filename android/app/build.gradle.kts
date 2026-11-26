@@ -28,13 +28,21 @@ android {
         targetSdk {
             version = release(37)
         }
-        versionCode = 3
-        versionName = "2.1.0"
+        versionCode = 4
+        versionName = "2.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Dades mock a Pròxims i En directe (captures i demostracions): posa
+    // leagueoftext.mockData=true a gradle.properties o passa -Pleagueoftext.mockData=true.
+    val mockData = providers.gradleProperty("leagueoftext.mockData").orNull.toBoolean()
+
     buildTypes {
+        debug {
+            buildConfigField("boolean", "MOCK_DATA", mockData.toString())
+        }
         release {
+            buildConfigField("boolean", "MOCK_DATA", "false")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

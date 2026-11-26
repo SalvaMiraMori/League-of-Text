@@ -47,7 +47,7 @@ data class Feed<T>(
  *
  * La memòria cau de Firestore fa que les dades es mostrin també sense connexió.
  */
-class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) {
+class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) : MatchSource {
 
     private val matches = db.collection(MATCHES)
 
@@ -62,9 +62,9 @@ class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) {
     /** Cada increment torna a crear els listeners de les llistes (p. ex. si estaven esperant un reintent). */
     private val restartFeeds = MutableStateFlow(0)
 
-    val scheduled: StateFlow<Feed<List<Match>>> = feed(scheduledQuery, scope)
-    val live: StateFlow<Feed<List<Match>>> = feed(liveQuery, scope)
-    val completed: StateFlow<Feed<List<Match>>> = feed(completedQuery, scope)
+    override val scheduled: StateFlow<Feed<List<Match>>> = feed(scheduledQuery, scope)
+    override val live: StateFlow<Feed<List<Match>>> = feed(liveQuery, scope)
+    override val completed: StateFlow<Feed<List<Match>>> = feed(completedQuery, scope)
 
     /**
      * Refresc manual de les llistes (estirar cap avall). Els listeners ja reben els canvis en temps
@@ -72,7 +72,7 @@ class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) {
      * listeners actius) i, si alguna llista estava en error, en reinicia el listener sense esperar
      * el següent reintent.
      */
-    suspend fun refreshLists() {
+    override suspend fun refreshLists() {
         if (listOf(scheduled, live, completed).any { it.value.error != null }) restartFeeds.update { it + 1 }
         fetchFromServer(
             { scheduledQuery.get(Source.SERVER).await() },
@@ -82,7 +82,7 @@ class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) {
     }
 
     /** Refresc manual del detall d'un partit: el partit, els seus jocs i els esdeveniments del joc visible. */
-    suspend fun refreshMatch(matchId: String, gameId: String?) {
+    override suspend fun refreshMatch(matchId: String, gameId: String?) {
         val match = matches.document(matchId)
         fetchFromServer(
             { match.get(Source.SERVER).await() },
@@ -104,7 +104,7 @@ class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) {
         }
     }
 
-    fun match(matchId: String): Flow<Match?> =
+    override fun match(matchId: String): Flow<Match?> =
         matches.document(matchId).observe()
             .map { FirestoreParsers.match(it) }
             .catch { error ->
@@ -113,7 +113,7 @@ class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) {
             }
             .flowOn(Dispatchers.Default)
 
-    fun games(matchId: String): Flow<List<Game>> =
+    override fun games(matchId: String): Flow<List<Game>> =
         matches.document(matchId).collection(GAMES).observe()
             .map { snapshot -> snapshot.documents.map { FirestoreParsers.game(it) }.sortedBy { it.number } }
             .catch { error ->
@@ -123,7 +123,7 @@ class MatchRepository(db: FirebaseFirestore, scope: CoroutineScope) {
             .flowOn(Dispatchers.Default)
 
     /** Esdeveniments d'un joc, del més recent al més antic. */
-    fun events(matchId: String, gameId: String): Flow<List<GameEvent>> =
+    override fun events(matchId: String, gameId: String): Flow<List<GameEvent>> =
         matches.document(matchId).collection(GAMES).document(gameId).collection(NOTIFICATIONS).observe()
             .map { snapshot ->
                 snapshot.documents

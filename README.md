@@ -1,5 +1,33 @@
 # League of Text
 
+**Follow the biggest *League of Legends* esports leagues live.** An Android app and a serverless AWS backend that track LCK, LEC, LCS, Worlds, MSI and First Stand matches and send a push notification for every in-game event: first blood, dragons, towers, barons, inhibitors and the final result.
+
+<p align="center">
+  <img src="docs/img/demo.gif" width="260" alt="Live matches, match detail with timeline and calendar">
+</p>
+
+<p align="center"><b>▶ <a href="docs/img/demo.mp4">Watch the full demo (2 min)</a></b></p>
+
+| Live | Match detail | Timeline | Calendar | Following |
+|:---:|:---:|:---:|:---:|:---:|
+| <img src="docs/img/live.png" width="160" alt="Live matches"> | <img src="docs/img/match-live.png" width="160" alt="Live match detail"> | <img src="docs/img/match-timeline.png" width="160" alt="Event timeline"> | <img src="docs/img/calendar-month.png" width="160" alt="Monthly calendar"> | <img src="docs/img/following.png" width="160" alt="Followed matches"> |
+
+**Stack:** Kotlin · Jetpack Compose · Material 3 · Firebase (Auth, Firestore, Cloud Messaging) · Python 3.12 · AWS Lambda · Amazon EventBridge · AWS SAM · GRID esports API
+
+**Highlights**
+
+- **Event-driven backend:** six Lambdas that schedule each other with EventBridge rules, which only run while a match is live.
+- **Real-time app:** Firestore listeners with an offline cache, pull to refresh, a spoiler-free mode and a monthly/weekly/daily calendar.
+- **Notifications** grouped per match; the app is available in Catalan, Spanish and English.
+- **Tested** with pytest, including the whole match flow with in-memory test doubles.
+- Started as my Bachelor's thesis (University of Barcelona, 2023) and rebuilt in 2026: bugs fixed, new architecture and no credentials in the code. See the [list of changes](docs/CANVIS.md).
+
+**Download:** the latest APK is on the [Releases page](https://github.com/SalvaMiraMori/League-of-Text/releases).
+
+<sub>The Upcoming and Live screenshots use the app's built-in demo data (`leagueoftext.mockData`); Results show real Worlds 2026 data.</sub>
+
+---
+
 Aplicació Android per seguir en temps real els partits de les grans lligues de *League of Legends* (LCK, LEC, LCS, Mundial, MSI i First Stand). Mostra els partits programats, en directe i acabats, i envia una notificació push de cada esdeveniment dels partits que segueixes: primera sang, multikills, torres, dracs, barons, inhibidors, pauses i resultat.
 
 La interfície s'inspira en l'app **Riot Mobile**: fons fosc, títols grans, fila de lligues, pestanyes amb subratllat daurat, targetes de partit amb el marcador amagat (ull) i, al detall, el selector de partides 1-5.
@@ -15,9 +43,11 @@ La interfície s'inspira en l'app **Riot Mobile**: fons fosc, títols grans, fil
 - **Backend complet:** les sis Lambdes, la plantilla d'AWS SAM, el model de dades unificat a `Matches` i la generació d'esdeveniments (primera sang, multikills, torres, dracs, barons, inhibidors, pauses i resultat). Tot amb tests de pytest, inclòs el flux sencer amb dobles en memòria.
 - **App Android:** pantalles Esports (Pròxims · En directe · Resultats, amb filtre per una o diverses lligues i, opcionalment, vista de calendari mensual, setmanal o diària que s'activa al Perfil), detall del partit amb selector de partides i cronologia, Seguint i Perfil. Inici de sessió amb Google, seguiment de partits sense compte, notificacions push agrupades per partit i traducció al català, castellà i anglès.
 - **Estirar per refrescar** a Esports, Seguint i al detall del partit: força una lectura al servidor i reinicia els listeners que havien fallat sense esperar el reintent.
+- **Pestanya inicial i En directe:** en obrir l'app es mostra la primera pestanya que tingui partits (En directe > Pròxims > Resultats). A En directe només hi ha les targetes dels partits, sense calendari ni dies plegables.
+- **Dades de demostració:** amb `leagueoftext.mockData=true` a `android/gradle.properties` (només en compilacions de debug), Pròxims i En directe mostren partits inventats amb hores relatives al moment d'obrir l'app. Les partides en directe avancen soles: el rellotge corre i hi apareixen esdeveniments nous. Resultats continua llegint Firestore. Vegeu `data/MockMatchRepository.kt`.
 - **Fila de lligues fixa:** LCK, LEC, LCS, Mundial, MSI i First Stand surten sempre, encara que la pestanya no en tingui partits, i conserven el logotip un cop vist.
 - **Migració del model antic** (`backend/scripts/migrate_legacy_collections.py`): reconstrueix el marcador i el guanyador dels partits acabats (el backend antic no desava l'última victòria), descarta els partits obsolets, estalvia quota de Firestore i es pot reprendre. L'opció `--scores-only` corregeix només els marcadors de partits ja migrats.
-- **Compilació actualitzada:** Kotlin 2.4.21, AGP 9.5.1 i Gradle 9.6, amb el dimoni de Gradle sobre JDK 25.
+- **Compilació actualitzada:** Kotlin 2.4.21, AGP 9.5.3 i Gradle 9.6, amb el dimoni de Gradle sobre JDK 25.
 - **Dades oficials de GRID:** el backend llegeix els partits de l'API oficial de GRID (Riot Games Open Access) per defecte, amb l'API de LoL Esports com a alternativa (`DATA_SOURCE`). Vegeu [`docs/GRID_API.md`](docs/GRID_API.md).
 
 **Pendent**
@@ -106,6 +136,8 @@ Si tens dades del model antic (`ScheduledMatches`, `LiveMatches`, `CompletedMatc
 
 Sense `google-services.json` l'app compila igualment i mostra una pantalla que explica què falta.
 
+Per veure l'app amb partits a Pròxims i En directe sense backend (captures, vídeos, proves de la interfície), posa `leagueoftext.mockData=true` a `android/gradle.properties`, sincronitza Gradle i executa la configuració de debug.
+
 L'`applicationId` continua sent `com.example.tfg_salva` perquè el `google-services.json` del projecte original segueixi funcionant. Si registres una app nova a Firebase, canvia'l a `android/app/build.gradle.kts`.
 
 ### Firestore
@@ -147,7 +179,7 @@ Per importar a Firestore partits que ja s'han jugat (p. ex. el Mundial 2026): `p
 ## Tecnologies
 
 - **App:** Kotlin 2.4.21, Jetpack Compose (BOM 2026.09.00, Compose 1.12, Material 3), Navigation Compose, ViewModel + StateFlow, Coil, Firebase Auth (Google amb Credential Manager), Firestore (memòria cau persistent) i Cloud Messaging. Interfície 100% Compose, sense layouts XML. `minSdk` 24, `compileSdk`/`targetSdk` 37. Idiomes: català, castellà i anglès.
-- **Compilació:** Gradle 9.6 (dimoni sobre JDK 25), Android Gradle Plugin 9.5.1 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
+- **Compilació:** Gradle 9.6 (dimoni sobre JDK 25), Android Gradle Plugin 9.5.3 amb Kotlin integrat (sense el plugin `kotlin-android`), catàleg de versions a `android/gradle/libs.versions.toml`.
 - **Backend:** Python 3.12, `requests`, `firebase-admin`, `boto3`, AWS Lambda, Amazon EventBridge, AWS SAM. Dades: API GraphQL de GRID (Open Access) o API de LoL Esports.
 
 ## Limitacions conegudes

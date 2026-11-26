@@ -9,6 +9,8 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.PersistentCacheSettings
 import com.leagueoftext.app.data.AuthRepository
 import com.leagueoftext.app.data.MatchRepository
+import com.leagueoftext.app.data.MatchSource
+import com.leagueoftext.app.data.MockMatchRepository
 import com.leagueoftext.app.data.SettingsRepository
 import com.leagueoftext.app.data.SubscriptionRepository
 import com.leagueoftext.app.notifications.LiveNotifications
@@ -53,7 +55,15 @@ class AppContainer(context: Context) {
 
     private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
 
-    val matches: MatchRepository by lazy { MatchRepository(firestore, appScope) }
+    /**
+     * Partits de Firestore o, si s'ha compilat amb `leagueoftext.mockData=true` (només debug),
+     * partits inventats a Pròxims i En directe; Resultats continua llegint Firestore.
+     */
+    val matches: MatchSource by lazy {
+        val firestoreMatches = if (firebaseConfigured) MatchRepository(firestore, appScope) else null
+        if (BuildConfig.MOCK_DATA) MockMatchRepository(firestoreMatches, appScope)
+        else checkNotNull(firestoreMatches) { "Firebase no està configurat" }
+    }
     val auth: AuthRepository by lazy { AuthRepository(firebaseAuth) }
     val subscriptions: SubscriptionRepository by lazy {
         SubscriptionRepository(prefs, firestore, firebaseAuth, appScope)
